@@ -1,0 +1,521 @@
+taxid <- cbind(taxid, ASV=names(dna)[match(rownames(taxid), as.character(dna))])
+head(taxid)
+for(rank in 1:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   paste,#
+                   collapse=';')#
+  taxtab <- matrix(NA,nrow=0,ncol=ncol(seqtab))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, apply(seqtab[subs,],1,colSums))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab[subs,])#
+    }#
+  }#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+head(taxid)
+for(rank in 2:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   paste,#
+                   collapse=';')#
+  taxtab <- matrix(NA,nrow=0,ncol=ncol(seqtab))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, apply(seqtab[subs,],1,colSums))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab[subs,])#
+    }#
+  }#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+head(fulltax)
+taxtab[1:5,1:5]
+taxtab <- matrix(NA,nrow=0,ncol=ncol(seqtab))
+taxtab[1:5,1:5]
+tax
+subs <- names(fulltax)[fulltax == tax]
+head(subs)
+rbind(taxtab, apply(seqtab[subs,],1,colSums))[1:5,1:5]
+seqtab[1:5,1:5]
+samplenames <- read.table('~/data/gainsbury_soil/Info on tags per sample.txt',sep='\t',header=T)
+rownames(seqtab) <- sapply(rownames(seqtab), function(x) samplenames$Sample[samplenames$Tag == sub('.fastq.gz','',sub('-',':',x))])#
+seqtab_F <- seqtab[grep('UFL',rownames(seqtab)),]#
+seqtab_M <- t(sapply(unique(sub('_.*','',rownames(seqtab_F))), function(x) apply(seqtab_F[grep(x,rownames(seqtab_F)),], 2, sum)))
+seqtab_M[1:5,1:5]
+for(rank in 2:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   paste,#
+                   collapse=';')#
+  taxtab <- matrix(NA,nrow=0,ncol=nrow(seqtab_M))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, apply(seqtab[,subs],1,colSums))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab[,subs])#
+    }#
+  }#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+for(rank in 2:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   paste,#
+                   collapse=';')#
+  taxtab <- matrix(NA,nrow=0,ncol=nrow(seqtab_M))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, apply(seqtab_M[,subs],1,colSums))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab_M[,subs])#
+    }#
+  }#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+for(rank in 2:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   paste,#
+                   collapse=';')#
+  taxtab <- matrix(NA,nrow=0,ncol=nrow(seqtab_M))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, apply(seqtab_M[,subs],2,colSums))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab_M[,subs])#
+    }#
+  }#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+for(rank in 2:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   paste,#
+                   collapse=';')#
+  taxtab <- matrix(NA,nrow=0,ncol=nrow(seqtab_M))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, apply(seqtab_M[,subs],2,rowSums))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab_M[,subs])#
+    }#
+  }#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+rank
+head(fulltax)
+tax
+subs <- names(fulltax)[fulltax == tax]
+head(subs)
+head(apply(seqtab_M[,subs],2,rowSums))
+seqtab_M[,subs][1:5,1:5]
+for(rank in 2:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   paste,#
+                   collapse=';')#
+  taxtab <- matrix(NA,nrow=0,ncol=nrow(seqtab_M))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, rowSums(seqtab_M[,subs]))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab_M[,subs])#
+    }#
+  }#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+for(rank in 2:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   paste,#
+                   collapse=';')#
+  taxtab <- matrix(NA,nrow=0,ncol=nrow(seqtab_M))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, rowSums(seqtab_M[,subs]))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab_M[,subs])#
+    }#
+  }#
+  colnames(taxtab) <- unique(fulltax)#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+for(rank in 2:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   paste,#
+                   collapse=';')#
+  taxtab <- matrix(NA,nrow=0,ncol=nrow(seqtab_M))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, rowSums(seqtab_M[,subs]))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab_M[,subs])#
+    }#
+  }#
+  rownames(taxtab) <- unique(fulltax)#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+for(rank in 2:ncol(taxid)) {#
+  fulltax <- apply(taxid[,1:rank],#
+                   1,#
+                   function(x) {#
+                     for(j in rank:2) {#
+                       if(!is.na(x[j])) {#
+                         if(grepl(paste0(x[j-1],'_'),x[j])) {#
+                           x[j] <- NA#
+                         } else {#
+                           break#
+                         }#
+                       }#
+                     }#
+                     paste(x,collapse=';')#
+                   })#
+  taxtab <- matrix(NA,nrow=0,ncol=nrow(seqtab_M))#
+  for(tax in unique(fulltax)) {#
+    subs <- names(fulltax)[fulltax == tax]#
+    if(length(subs) > 1) {#
+      taxtab <- rbind(taxtab, rowSums(seqtab_M[,subs]))#
+    } else {#
+      taxtab <- rbind(taxtab, seqtab_M[,subs])#
+    }#
+  }#
+  rownames(taxtab) <- unique(fulltax)#
+  write.table(taxtab, file=paste0(colnames(taxid)[[rank]],'_counts.txt'), sep='\t', quote=F)#
+}
+?write.table
+hi <- matrix(rnorm(12),nrow=4)
+qr.R(qr(hi))
+qr.R(qr(cbind(1,hi)))
+cbind(1,hi)
+hi <- matrix(rnorm(15),nrow=5)
+cbind(1,hi)
+qr.R(qr(cbind(1,hi)))
+qr.R(qr(hi))
+cbind(c(1,0,0,0),rnorm(8,nrow=4)) %*% qr.R(qr(hi))
+cbind(c(1,0,0,0),matrix(rnorm(8),nrow=4)) %*% qr.R(qr(hi))
+cbind(c(1,0,0,0),matrix(rnorm(6),nrow=3)) %*% qr.R(qr(hi))
+cbind(c(1,0,0,),matrix(rnorm(6),nrow=3)) %*% qr.R(qr(hi))
+cbind(c(1,0,0),matrix(rnorm(6),nrow=3)) %*% qr.R(qr(hi))
+cbind(c(1,0,0),matrix(rnorm(6),nrow=3)) %*% t(qr.R(qr(hi)))
+t(qr.R(qr(hi)))
+?qr.R
+?qr
+hi <- matrix(rnorm(12),nrow=3)
+hi
+solve(qr.R(qr(hi)))
+hi <- matrix(rnorm(15),nrow=5)
+solve(qr.R(qr(hi)))
+solve(qr.R(qr(cbind(hi,hi[,1]))))
+qr.R(qr(cbind(hi,hi[,1])))
+?ginv
+MASS::ginv(qr.R(qr(cbind(hi,hi[,1]))))
+MASS::ginv(qr.R(qr(cbind(hi))))
+MASS::ginv(qr.R(qr(cbind(hi,hi[,1])))) %*% qr.R(qr(cbind(hi,hi[,1])))
+qr.R(qr(cbind(hi,hi[,1])))
+qr.R(qr(cbind(hi,hi[,1])))[,0]
+X_f <- cbind(hi,hi[,1])
+X_f
+qr.xf <- qr(X_f)#
+rank_X_f <- qr.xf$rank#
+R_f <- qr.R(qr.xf)#
+R_inv_f <- MASS::ginv(R_f)[,1:rank_X_f]
+R_inv_f
+rank_X_f
+I_diff_AA_reduced_f <- diag(1,nrow(R_inv_f)) - R_inv_f %*% R_f[1:rank_X_f,]#
+  qr.if <- qr(I_diff_AA_reduced_f)#
+  top_rows <- sort(order(abs(diag(qr.R(qr.if))),decreasing=T)[1:(NB_f-rank_X_f)])#
+  Q_I_s <- qr.Q(qr.if)[,top_rows]
+NB_f <- 4
+I_diff_AA_reduced_f <- diag(1,nrow(R_inv_f)) - R_inv_f %*% R_f[1:rank_X_f,]#
+  qr.if <- qr(I_diff_AA_reduced_f)#
+  top_rows <- sort(order(abs(diag(qr.R(qr.if))),decreasing=T)[1:(NB_f-rank_X_f)])#
+  Q_I_s <- qr.Q(qr.if)[,top_rows]
+Q_I_s
+X_f <- cbind(cbind(hi,hi[,1]),hi[,1])
+qr.xf <- qr(X_f)#
+rank_X_f <- qr.xf$rank#
+R_f <- qr.R(qr.xf)#
+R_inv_f <- MASS::ginv(R_f)[,1:rank_X_f]
+NB_f <- 5
+I_diff_AA_reduced_f <- diag(1,nrow(R_inv_f)) - R_inv_f %*% R_f[1:rank_X_f,]#
+  qr.if <- qr(I_diff_AA_reduced_f)#
+  top_rows <- sort(order(abs(diag(qr.R(qr.if))),decreasing=T)[1:(NB_f-rank_X_f)])#
+  Q_I_s <- qr.Q(qr.if)[,top_rows]
+Q_I_s
+I_diff_AA_reduced_f
+solve(qr.R(qr.if))
+MASS:ginv(qr.R(qr.if))
+MASS::ginv(qr.R(qr.if))
+load("/private/var/folders/f6/66j4qtlx3w75c0zwl7_tj7ym0000gn/T/ch.sudo.cyberduck/790b5012-859a-40a0-a769-7c72a39973cb/Users/rm/outputs/2021_soil_edna/outputs/20220110_rcm_nc/zip_glm/zip_glm_setup.RData")
+rawCorS <- cov2cor(crossprod(t(apply(counts_rlog,1,function(x) x-mean(x)))))
+rawCorF <- cov2cor(tcrossprod(t(apply(counts_rlog,2,function(x) x-mean(x)))))
+rawCorS[1:5,1:5]
+rawCorF[1:5,1:5]
+dim(counts_rlog)
+dim(counts)
+rawCorF <- cov2cor(tcrossprod(apply(counts_rlog,2,function(x) x-mean(x))))
+rawCorF[1:5,1:5]
+unname(rawCorF[1:5,1:5])
+unname(rawCorS[1:5,1:5])
+hi <- apply(counts_rlog,2,function(x) x-mean(x))
+hi[1:5,1:5]
+unname(hi[1:5,1:5])
+mean(hi)
+sampleOrder <- order(apply(abs(cov2cor(crossprod(t(apply(counts_rlog,1,function(x) x-mean(x)))))),2,mean), decreasing=TRUE)
+featureOrder <- order(apply(abs(cov2cor(tcrossprod(apply(counts_rlog,2,function(x) x-mean(x))))),2,mean), decreasing=TRUE)
+?cmdstanr::install_cmdstan
+sampleOrder
+rawCorF[sampleOrder, sampleOrder]
+rawCorS[sampleOrder, sampleOrder]
+rawCorS[sampleOrder, sampleOrder][1:5,1:5]
+hi <- apply(counts_rlog,2,function(x) x-mean(x))
+dim(hi)
+dim(apply(counts_rlog,1,function(x) x-mean(x)))
+CorAfterS <- cov2cor(crossprod(X_f %*% MASS::ginv(X_f) %*% t(apply(counts_rlog,1,function(x) x-mean(x))) t(X_s %*% MASS::ginv(X_s)))#
+CorAfterF <- cov2cor(tcrossprod(X_f %*% MASS::ginv(X_f) %*% apply(counts_rlog,2,function(x) x-mean(x)) t(X_s %*% MASS::ginv(X_s)))
+CorAfterS <- cov2cor(crossprod(X_f %*% MASS::ginv(X_f) %*% t(apply(counts_rlog,1,function(x) x-mean(x))) %*% t(X_s %*% MASS::ginv(X_s)))#
+CorAfterF <- cov2cor(tcrossprod(X_f %*% MASS::ginv(X_f) %*% apply(counts_rlog,2,function(x) x-mean(x)) %*% t(X_s %*% MASS::ginv(X_s)))
+CorAfterS <- cov2cor(crossprod(X_f %*% MASS::ginv(X_f) %*% t(apply(counts_rlog,1,function(x) x-mean(x))) %*% t(X_s %*% MASS::ginv(X_s))))#
+CorAfterF <- cov2cor(tcrossprod(X_f %*% MASS::ginv(X_f) %*% apply(counts_rlog,2,function(x) x-mean(x)) %*% t(X_s %*% MASS::ginv(X_s))))
+sampleOrder <- order(apply(abs(CorAfterS)),2,mean), decreasing=TRUE)#
+featureOrder <- order(apply(abs(CorAfterF)),2,mean), decreasing=TRUE)
+sampleOrderAfter <- order(apply(abs(CorAfterS),2,mean), decreasing=TRUE)#
+featureOrderAfter <- order(apply(abs(CorAfterF),2,mean), decreasing=TRUE)
+rawCorS[sampleOrder, sampleOrder][1:5,1:5]
+CorAfterS[sampleOrderAfter, sampleOrderAfter][1:5,1:5]
+CorAfterS
+CorAfterS[sampleOrderAfter, sampleOrderAfter]
+sNorm <- apply(counts_rlog,1,function(x) x-mean(x))#
+fNorm <- apply(counts_rlog,2,function(x) x-mean(x))#
+#
+rawCorS <- cov2cor(tcrossprod(sNorm))#
+rawCorF <- cov2cor(tcrossprod(fNorm))#
+#
+sampleOrder <- order(apply(abs(rawCorS),2,mean), decreasing=TRUE)#
+featureOrder <- order(apply(abs(rawCorF),2,mean), decreasing=TRUE)#
+#
+CorAfterS <- cov2cor(crossprod(t(sNorm)  - X_f %*% MASS::ginv(X_f) %*% t(sNorm) %*% t(X_s %*% MASS::ginv(X_s))))#
+CorAfterF <- cov2cor(tcrossprod(fNorm  - X_f %*% MASS::ginv(X_f) %*% fNorm %*% t(X_s %*% MASS::ginv(X_s))))#
+#
+sampleOrderAfter <- order(apply(abs(CorAfterS),2,mean), decreasing=TRUE)#
+featureOrderAfter <- order(apply(abs(CorAfterF),2,mean), decreasing=TRUE)#
+#
+CorAfterS[sampleOrderAfter, sampleOrderAfter][1:5,1:5]
+rawCorS[sampleOrder, sampleOrder][1:5,1:5]#
+CorAfterS[sampleOrderAfter, sampleOrderAfter][1:5,1:5]
+sNorm <- apply(counts_rlog,1,function(x) x-mean(x))#
+sNorm <- apply(sNorm,2,function(x) x-mean(x))#
+#
+rawCorS <- cov2cor(crossprod(sNorm))#
+rawCorF <- cov2cor(tcrossprod(sNorm))#
+#
+sampleOrder <- order(apply(abs(rawCorS),2,mean), decreasing=TRUE)#
+featureOrder <- order(apply(abs(rawCorF),2,mean), decreasing=TRUE)#
+#
+CorAfterS <- cov2cor(crossprod(sNorm  - X_f %*% MASS::ginv(X_f) %*% sNorm %*% t(X_s %*% MASS::ginv(X_s))))#
+CorAfterF <- cov2cor(tcrossprod(t(sNorm)  - X_f %*% MASS::ginv(X_f) %*% t(sNorm) %*% t(X_s %*% MASS::ginv(X_s))))#
+#
+sampleOrderAfter <- order(apply(abs(CorAfterS),2,mean), decreasing=TRUE)#
+featureOrderAfter <- order(apply(abs(CorAfterF),2,mean), decreasing=TRUE)#
+#
+rawCorS[sampleOrder, sampleOrder][1:5,1:5]#
+CorAfterS[sampleOrderAfter, sampleOrderAfter][1:5,1:5]
+sNorm <- apply(counts_rlog,2,function(x) x-mean(x))#
+sNorm <- apply(sNorm,1,function(x) x-mean(x))#
+#
+rawCorS <- cov2cor(crossprod(sNorm))#
+rawCorF <- cov2cor(tcrossprod(sNorm))
+dim(rawCorS)
+rawCorS <- cov2cor(tcrossprod(sNorm))#
+rawCorF <- cov2cor(crossprod(sNorm))#
+#
+sampleOrder <- order(apply(abs(rawCorS),2,mean), decreasing=TRUE)#
+featureOrder <- order(apply(abs(rawCorF),2,mean), decreasing=TRUE)
+dim(rawCorS)
+dim(sNorm)
+sNorm <- apply(counts_rlog,2,function(x) x-mean(x))#
+sNorm <- apply(sNorm,1,function(x) x-mean(x))#
+#
+rawCorS <- cov2cor(tcrossprod(sNorm))#
+rawCorF <- cov2cor(crossprod(sNorm))#
+#
+sampleOrder <- order(apply(abs(rawCorS),2,mean), decreasing=TRUE)#
+featureOrder <- order(apply(abs(rawCorF),2,mean), decreasing=TRUE)#
+#
+sResid <- sNorm  - X_s %*% MASS::ginv(X_s) %*% sNorm %*% t(X_f %*% MASS::ginv(X_f))#
+#
+CorAfterS <- cov2cor(tcrossprod(sResid))#
+CorAfterF <- cov2cor(crossprod(sResid))#
+#
+sampleOrderAfter <- order(apply(abs(CorAfterS),2,mean), decreasing=TRUE)#
+featureOrderAfter <- order(apply(abs(CorAfterF),2,mean), decreasing=TRUE)#
+#
+rawCorS[sampleOrder, sampleOrder][1:5,1:5]#
+CorAfterS[sampleOrderAfter, sampleOrderAfter][1:5,1:5]
+norm(sNorm,"2")
+norm(sResid,"2")
+sNorm[1:5,1:5]
+unname(sNorm[1:5,1:5])
+counts[1:5,1:5]
+counts_rlog_centered <- t(apply(apply(counts_rlog,2,function(x) x-mean(x)),1,function(x) x-mean(x)))#
+counts_rlog_residuals <- counts_rlog_centered - X_f %*% MASS::ginv(X_f) %*% counts_rlog_centered %*% t(X_s %*% MASS::ginv(X_s))
+sampleOrder <- order(apply(abs(cov2cor(tcrossprod(counts_rlog_residuals))),2,mean), decreasing=TRUE)
+colnames(counts_rlog)[sampleOrder][1:5]
+rownames(counts_rlog)[sampleOrder][1:5]
+sampleOrder <- order(apply(abs(cov2cor(crossprod(counts_rlog_residuals))),2,mean), decreasing=TRUE)
+colnames(counts_rlog)[sampleOrder][1:5]
+sampleOrder <- order(apply((cov2cor(crossprod(counts_rlog_residuals)))^2,2,mean), decreasing=TRUE)
+colnames(counts_rlog)[sampleOrder][1:5]
+sampleOrder <- order(apply((cov2cor(crossprod(counts_rlog_residuals)))^2,2,sum), decreasing=TRUE)
+colnames(counts_rlog)[sampleOrder][1:5]
+temp <- cov2cor(crossprod(counts_rlog_residuals)))
+temp <- cov2cor(crossprod(counts_rlog_residuals))
+sampleOrder <- order(apply(chol(temp),2,sum), decreasing=TRUE)
+colnames(counts_rlog)[sampleOrder][1:5]
+sampleOrder <- order(apply(crossprod(counts_rlog_residuals)^2,2,sum), decreasing=TRUE)
+colnames(counts_rlog)[sampleOrder][1:5]
+sampleOrder <- order(apply(counts_rlog_residuals^2,2,sum), decreasing=TRUE)
+length(sampleOrder)
+colnames(counts_rlog)[sampleOrder][1:5]
+?crossprod
+sampleCov <- crossprod(counts_rlog_residuals)
+sampleCov
+(sampleCov-diag(sampleCov))
+sampleOrder <- order(apply((sampleCov-diag(sampleCov))^2,2,sum), decreasing=TRUE)
+colnames(counts_rlog)[sampleOrder][1:5]
+sampleOrder <- order(apply((sampleCov-diag(sampleCov)),2,mean), decreasing=TRUE)
+colnames(counts_rlog)[sampleOrder][1:5]
+pr <- princomp(counts_rlog_residuals)
+plot(pr)
+names(pr)
+plot(pr$loadings)
+dim(pr$loadings)
+pr$loadings
+rownames(pr$loadings)which.max(pr$loadings[,1])
+rownames(pr$loadings)[which.max(pr$loadings[,1])]
+rownames(pr$loadings)[which.max(pr$loadings[,2])]
+nums <- apply(pr$loadings,1,function(x) x[1] / sqrt(sum(x[2:length(x)]^2)))
+nums
+nums <- apply(pr$loadings,1,function(x) abs(x[1]) / sqrt(sum(x[2:length(x)]^2)))
+nums
+sort(nums)
+nums <- apply(pr$loadings,1,function(x) abs(x[2]) / sqrt(sum(x[-2]^2)))
+sort(nums)
+nums <- apply(pr$loadings,1,function(x) abs(x[3]) / sqrt(sum(x[-3]^2)))
+sort(nums)
+pr <- princomp(t(counts_rlog_residuals))$loadings
+?princomp
+pr <- prcomp(t(counts_rlog_residuals))$loadings
+pr <- prcomp(counts_rlog_residuals)$loadings
+dim(pr)
+pr <- prcomp(counts_rlog_residuals)
+names(pr)
+pr <- prcomp(counts_rlog_residuals)$rotation
+dim(pr)
+nums <- apply(pr,1,function(x) abs(x[1]) / sqrt(sum(x[-1]^2)))
+sort(nums)
+pr <- prcomp(t(counts_rlog_residuals))$rotation
+dim(pr)
+pr <- prcomp(counts_rlog_residuals)$rotation
+nums <- apply(pr,1,function(x) abs(x[1]) / sum(abs(x[-1])))
+sort(nums)
+sampleOrder <- vector(0)
+sampleOrder <- vector('numeric')
+sampleOrder
+pr <- prcomp(counts_rlog_residuals)$rotation#
+sampleOrder <- vector('numeric')#
+for(i in 1:ncol(pr)) {#
+  sampleOrder <- c(sampleOrder, colnames(pr)[which.max(apply(pr,1,function(x) abs(x[i]) / sqrt(sum(x[-1]^2))))])#
+}
+length(sampleOrder)
+length(unique(sampleOrder))
+pr <- prcomp(counts_rlog_residuals)$rotation#
+sampleOrder <- vector('numeric')#
+sampsLeft <- colnames(pr)#
+for(i in 1:(ncol(pr)-1)) {#
+  winner <- which.max(apply(pr[,sampsLeft],1,function(x) abs(x[i]) / sqrt(sum(x[-1]^2))))#
+  sampleOrder <- c(sampleOrder, sampsLeft[winner])#
+  sampsLeft <- sampsLeft[-winner]#
+}
+length(sampleOrder)
+length(unique(sampleOrder))
+sampsLeft
+pr <- prcomp(counts_rlog_residuals)$rotation#
+sampleOrder <- vector('numeric')#
+sampsLeft <- colnames(pr)
+sampleOrder
+sampsLeft
+dim(pr)
+rownames(pr)
+pr <- prcomp(counts_rlog_residuals)$rotation#
+sampleOrder <- vector('numeric')#
+sampsLeft <- rownames(pr)#
+for(i in 1:(ncol(pr)-1)) {#
+  winner <- which.max(apply(pr[sampsLeft,],1,function(x) abs(x[i]) / sqrt(sum(x[-1]^2))))#
+  sampleOrder <- c(sampleOrder, sampsLeft[winner])#
+  sampsLeft <- sampsLeft[-winner]#
+}#
+sampleOrder <- c(sampleOrder, sampsLeft)
+length(sampleOrder)
+length(unique(sampleOrder))
+sampleOrder
+plot(pr)
+head(X_s)
+pr <- prcomp(counts_rlog)$rotation
+plot(pr)
+counts <- t(seqtab_M)#
+counts <- counts[apply(counts,1,sd) > 0,]
+counts_rlog <- DESeq2::rlog(counts)#
+counts_rlog_centered <- t(apply(apply(counts_rlog,2,function(x) x-mean(x)),1,function(x) x-mean(x)))#
+counts_rlog_residuals <- counts_rlog_centered - X_f %*% MASS::ginv(X_f) %*% counts_rlog_centered %*% t(X_s %*% MASS::ginv(X_s))#
+pr <- prcomp(counts_rlog_residuals)$rotation
+plot(pr)
+pr <- prcomp(counts_rlog)$rotation
+plot(pr)
+pr <- prcomp(counts_rlog_centered)$rotation
+plot(pr)
+hi <- apply(counts_rlog_centered,1,function(x) x / sd(x))
+dim(hi)
+dim(counts_rlog_centered)
+hi <- t(apply(counts_rlog_centered,1,function(x) x / sd(x)))
+pr <- prcomp(hi)$rotation
+plot(pr)
+hi <- apply(t(apply(counts_rlog_centered,1,function(x) x / sd(x))),2,function(x)x / sd(x))
+pr <- prcomp(hi)$rotation
+plot(pr)
+met <- metadat[rownames(pr),]
+dim(met)
+plot(pr, color=as.factor(metadat$Location))
+nlevels(metadat$Location)
+nlevels(as.factor(metadat$Location))
+plot(pr, color=c('blue','yellow','green','black','grey','red','purple','orange','pink')[as.factor(metadat$Location)])
+plot(pr, co=c('blue','yellow','green','black','grey','red','purple','orange','pink')[as.factor(metadat$Location)])
+plot(pr, col=c('blue','yellow','green','black','grey','red','purple','orange','pink')[as.factor(metadat$Location)])
+colnames(metadat)
+nlevels(as.factor(metadat$env.features))
+plot(pr, col=c('blue','green','black','red','purple','orange')[as.factor(metadat$env.features)])
+levels(as.factor(metadat$env.features))
+?cmdstanr::rebuild_cmdstan
+cmdstanr::rebuild_cmdstan()
+cmdstanr::install_cmdstan(version = "2.29.0-rc2", cores = 4, cpp_options = list("STAN_THREADS" = "true", "STANCFLAGS+= --O1"))
+placeBB <- osmdata::getbb('Oregon')
+c(placeBB[2:1,1],placeBB[2:1,2])
+placeBB <- osmdata::getbb('Florida')
+obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]), year = as.numeric(format(Sys.Date()-1,"%Y")), month = as.numeric(format(Sys.Date()-1,"%m")), day = as.numeric(format(Sys.Date()-1,"%d")))
+head(obs)
+setwd('~/scripts/iNatle/')#
+library(shiny)#
+runApp()
