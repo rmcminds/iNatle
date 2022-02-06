@@ -1,8 +1,8 @@
 library(shiny)
 library(htmltools)
 
-words <- read.table('words.txt', sep='\t')[,1]
-words <- tolower(words)
+words <- read.table('words.txt', sep='\t')
+words[,1] <- tolower(words[,1])
 
 ui <- fluidPage(
   sidebarLayout(
@@ -189,7 +189,8 @@ server <- function(input, output) {
     obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]), year = as.numeric(format(Sys.Date()-1,"%Y")), month = as.numeric(format(Sys.Date()-1,"%m")), day = as.numeric(format(Sys.Date()-1,"%d")))
     words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
     words_today <- tolower(words_today)
-    words_today <- words_today[words_today %in% words]
+    words_today <- words_today[words_today %in% words[,1]]
+    words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
     weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
     output$common <- renderText({paste0('Options: ', paste(unique(unlist(sapply(words_today,function(x) obs$common_name[grepl(x,tolower(obs$scientific_name))]))),collapse=', '))})
     words_today(list(words_today=words_today,weights=weights))
@@ -209,7 +210,7 @@ server <- function(input, output) {
       observeEvent(input$Enter, {
         guess <- paste(current_guess_letters(), collapse = "")
 
-        if (! guess %in% words)
+        if (! guess %in% words[,1])
           return()
 
         # if (input$hard) {
