@@ -5,26 +5,23 @@ words <- read.table('words.txt', sep='\t')
 words[,1] <- tolower(words[,1])
 
 ui <- fluidPage(
-  sidebarLayout(
-    sidebarPanel(textInput('Place', h3('Place name'), value='Oregon'),
-                 actionButton('submit','Submit'),
-                 textOutput('common')),
-    mainPanel(
-    theme = bslib::bs_theme(version = 4),
-    title = "iNatle: Local Genera",
-    tags$style(HTML("
+  theme = bslib::bs_theme(version = 4),
+  title = "iNatle: Local Genera",
+  tags$style(HTML("
     .container-fluid {
         text-align: center;
+        vertical-align: top;
         height: calc(100vh - 30px);
         display: grid;
         grid-template-rows: 1fr auto;
+        overflow-y: scroll;
     }
     .guesses {
-        overflow-y: auto;
+        overflow-y: scroll;
         height: 100%;
     }
     .guesses.finished {
-        overflow-y: visible;
+        overflow-y: scroll;
     }
     .guesses .word {
         margin: 5px;
@@ -113,64 +110,66 @@ ui <- fluidPage(
         box-shadow: 4px 4px 19px rgb(0 0 0 / 17%);
     }
   ")),
-    div(
-      class = "guesses",
-      h3("iNatle: Local Genera"),
-      uiOutput("previous_guesses"),
-      uiOutput("current_guess"),
-      uiOutput("endgame"),
-      uiOutput("new_game_ui")
-    ),
-    uiOutput("keyboard"),
-    # div(
-    #   style="display: inline-block;",
-    #   checkboxInput("hard", "Hard mode")
-    # ),
-    tags$script(HTML("
-      const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-                       'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
-      const all_key_ids = [ ...letters, 'Enter', 'Back'];
-      document.addEventListener('keydown', function(e) {
-        let key = e.code.replace(/^Key/, '');
-        if (letters.includes(key)) {
-          document.getElementById(key).click();
-        } else if (key == 'Enter') {
-          document.getElementById('Enter').click();
-        } else if (key == 'Backspace') {
-          document.getElementById('Back').click();
-        }
-      });
+  div(
+    class = "guesses",
+    textInput('Place', h3('Enter a place name'), value='Oregon', width='100%'),
+    actionButton('submit','Submit'),
+    textOutput('common'),
+    h3("iNatle: Find the genus from the above common names"),
+    uiOutput("previous_guesses"),
+    uiOutput("current_guess"),
+    uiOutput("endgame"),
+    uiOutput("new_game_ui"),
+    uiOutput("keyboard")
+  ),
+  # div(
+  #   style="display: inline-block;",
+  #   checkboxInput("hard", "Hard mode")
+  # ),
+  tags$script(HTML("
+    const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+                     'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
+    const all_key_ids = [ ...letters, 'Enter', 'Back'];
+    document.addEventListener('keydown', function(e) {
+      let key = e.code.replace(/^Key/, '');
+      if (letters.includes(key)) {
+        document.getElementById(key).click();
+      } else if (key == 'Enter') {
+        document.getElementById('Enter').click();
+      } else if (key == 'Backspace') {
+        document.getElementById('Back').click();
+      }
+    });
 
-      // For better responsiveness on touch devices, trigger a click on the button
-      // when a touchstart event occurs; don't wait for the touchend event. So
-      // that a click event doesn't happen when the touchend event happens (and
-      // cause the letter to be typed a second time), we set the 'pointer-events'
-      // CSS property to 'none' on the button. Then when there's _any_ touchend
-      // event, unset the 'pointer-events' CSS property on all of the buttons, so
-      // that the button can be touched again.
-      let in_button_touch = false;
-      document.addEventListener('touchstart', function(e) {
-          if (all_key_ids.includes(e.target.id)) {
-              e.target.click();
-              e.target.style.pointerEvents = 'none';
-              e.preventDefault();   // Disable text selection
-              in_button_touch = true;
-          }
-      });
-      document.addEventListener('touchend', function(e) {
-          all_key_ids.map((id) => {
-              document.getElementById(id).style.pointerEvents = null;
-          });
-          if (in_button_touch) {
-              if (all_key_ids.includes(e.target.id)) {
-                  // Disable text selection and triggering of click event.
-                  e.preventDefault();
-              }
-              in_button_touch = false;
-          }
-      });
-    ")))
-  )
+    // For better responsiveness on touch devices, trigger a click on the button
+    // when a touchstart event occurs; don't wait for the touchend event. So
+    // that a click event doesn't happen when the touchend event happens (and
+    // cause the letter to be typed a second time), we set the 'pointer-events'
+    // CSS property to 'none' on the button. Then when there's _any_ touchend
+    // event, unset the 'pointer-events' CSS property on all of the buttons, so
+    // that the button can be touched again.
+    let in_button_touch = false;
+    document.addEventListener('touchstart', function(e) {
+        if (all_key_ids.includes(e.target.id)) {
+            e.target.click();
+            e.target.style.pointerEvents = 'none';
+            e.preventDefault();   // Disable text selection
+            in_button_touch = true;
+        }
+    });
+    document.addEventListener('touchend', function(e) {
+        all_key_ids.map((id) => {
+            document.getElementById(id).style.pointerEvents = null;
+        });
+        if (in_button_touch) {
+            if (all_key_ids.includes(e.target.id)) {
+                // Disable text selection and triggering of click event.
+                e.preventDefault();
+            }
+            in_button_touch = false;
+        }
+    });
+  "))
 )
 
 
@@ -179,213 +178,275 @@ server <- function(input, output) {
   words_today <- reactiveVal(list())
   target_word <- reactiveVal(character(0))
   all_guesses <- reactiveVal(list())
+  started <- reactiveVal(FALSE)
   finished <- reactiveVal(FALSE)
   current_guess_letters <- reactiveVal(character(0))
 
-  get_place <- function() {
-    ##might want to add an option to draw a boundary using leaflet
-    placeBB <- osmdata::getbb(input$Place)
-    ##
-    obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]), year = as.numeric(format(Sys.Date()-1,"%Y")), month = as.numeric(format(Sys.Date()-1,"%m")), day = as.numeric(format(Sys.Date()-1,"%d")))
-    words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
-    words_today <- tolower(words_today)
-    words_today <- words_today[words_today %in% words[,1]]
-    words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
-    weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
-    output$common <- renderText({paste0('Options: ', paste(unique(unlist(sapply(words_today,function(x) obs$common_name[grepl(x,tolower(obs$scientific_name))]))),collapse=', '))})
-    words_today(list(words_today=words_today,weights=weights))
-    target_word(sample(words_today, 1, prob=sqrt(weights)))
+  ##might want to add an option to draw a boundary using leaflet
+  try_place <- function(placename,placelevel,words) {
+    placeBB <- osmdata::getbb(placename,featuretype=placelevel)
+    if(any(is.na(placeBB))) simpleError()
+    tryCatch({
+      obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]), year = as.numeric(format(Sys.Date()-1,"%Y")), month = as.numeric(format(Sys.Date()-1,"%m")), day = as.numeric(format(Sys.Date()-1,"%d")))
+      words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
+      words_today <- tolower(words_today)
+      words_today <- words_today[words_today %in% words[,1]]
+      words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
+      if(length(words_today) <= 10) simpleError()
+      weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
+      common <- paste0(paste0('Organisms observed in ',placename,' yesterday: '), paste(unique(unlist(sapply(words_today,function(x) obs$common_name[grepl(x,tolower(obs$scientific_name))]))),collapse=', '))
+      return(list(words_today=words_today,weights=weights,common=common))
+    },
+      error=function(e1) {
+        tryCatch({
+          obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]), month = as.numeric(format(Sys.Date(),"%m")), day = as.numeric(format(Sys.Date(),"%d")))
+          words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
+          words_today <- tolower(words_today)
+          words_today <- words_today[words_today %in% words[,1]]
+          words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
+          if(length(words_today) <= 10) simpleError()
+          weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
+          common <- paste0(paste0('Organisms observed in ',placename,' on this date in all previous years: '), paste(unique(unlist(sapply(words_today,function(x) obs$common_name[grepl(x,tolower(obs$scientific_name))]))),collapse=', '))
+          return(list(words_today=words_today,weights=weights,common=common))
+        },
+        error=function(e2) {
+          tryCatch({
+            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]), month = as.numeric(format(Sys.Date(),"%m")))
+            words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
+            words_today <- tolower(words_today)
+            words_today <- words_today[words_today %in% words[,1]]
+            words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
+            if(length(words_today) <= 10) simpleError()
+            weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
+            common <- paste0(paste0('Organisms observed in ',placename,' in this month in all previous years: '), paste(unique(unlist(sapply(words_today,function(x) obs$common_name[grepl(x,tolower(obs$scientific_name))]))),collapse=', '))
+            return(list(words_today=words_today,weights=weights,common=common))
+          },
+          error=function(e3) {
+            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]))
+            words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
+            words_today <- tolower(words_today)
+            words_today <- words_today[words_today %in% words[,1]]
+            words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
+            weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
+            common <- paste0(paste0('Organisms ever observed in ',placename,': '), paste(unique(unlist(sapply(words_today,function(x) obs$common_name[grepl(x,tolower(obs$scientific_name))]))),collapse=', '))
+            return(list(words_today=words_today,weights=weights,common=common))
+          }
+          )
+        }
+        )
+      }
+    )
   }
 
-  observeEvent(input$submit,
-    {
-      get_place()
-
-      reset_game <- function() {
-        target_word(sample(words_today$words_today, 1, prob=sqrt(words_today$weights)))
-        all_guesses(list())
-        finished(FALSE)
-      }
-
-      observeEvent(input$Enter, {
-        guess <- paste(current_guess_letters(), collapse = "")
-
-        if (! guess %in% words[,1])
-          return()
-
-        # if (input$hard) {
-        # # Letters in the target word that the player has previously
-        # # guessed correctly.
-        # matched_letters = used_letters().intersection(set(target_word()))
-        # if not set(guess).issuperset(matched_letters):
-        #     return
-        # }
-
-        all_guesses_new <- all_guesses()
-
-        check_result <- check_word(guess, target_word())
-        all_guesses_new[[length(all_guesses_new) + 1]] <- check_result
-        all_guesses(all_guesses_new)
-
-        if (isTRUE(check_result$win)) {
-            finished(TRUE)
-        }
-
-        current_guess_letters(character(0))
-      })
-
-      output$previous_guesses <- renderUI({
-        res <- lapply(all_guesses(), function(guess) {
-          letters <- guess$letters
-          row <- mapply(
-            letters,
-            guess$matches,
-            FUN = function(letter, match) {
-              # This will have the value "correct", "in-word", or "not-in-word", and
-              # those values are also used as CSS class names.
-              match_type <- match
-              div(toupper(letter), class = paste("letter", match_type))
-            },
-            SIMPLIFY = FALSE,
-            USE.NAMES = FALSE
-          )
-          div(class = "word", row)
-        })
-
-        scroll_js <- "
-            document.querySelector('.guesses')
-              .scrollTo(0, document.querySelector('.guesses').scrollHeight);
-        "
-        tagList(res, tags$script(HTML(scroll_js)))
-      })
-
-      output$current_guess <- renderUI({
-        if (finished()) return()
-
-        letters <- current_guess_letters()
-
-        # Fill in blanks for letters up to length of target word. If letters is:
-        #   "a" "r"
-        # then result is:
-        #   "a" "r" "" "" ""
-        target_length <- isolate(nchar(target_word()))
-        if (length(letters) < target_length) {
-          letters[(length(letters)+1) : target_length] <- ""
-        }
-
-        div(
-          class = "word",
-          lapply(letters, function(letter) {
-            div(toupper(letter), class ="letter guess")
-          })
-        )
-      })
-
-      output$new_game_ui <- renderUI({
-        if (!finished())
-          return()
-
-        actionButton("new_game", "New Game")
-      })
-
-      observeEvent(input$new_game, {
-        reset_game()
-      })
-
-      used_letters <- reactive({
-        # This is a named list. The structure will be something like:
-        # list(p = "not-in-word", a = "in-word", e = "correct")
-        letter_matches <- list()
-
-        # Populate `letter_matches` by iterating over all letters in all the guesses.
-        lapply(all_guesses(), function(guess) {
-          mapply(guess$letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE,
-            FUN = function(letter, match) {
-              prev_match <- letter_matches[[letter]]
-              if (is.null(prev_match)) {
-                # If there isn't an existing entry for that letter, just use it.
-                letter_matches[[letter]] <<- match
-              } else {
-                # If an entry is already present, it can be "upgraded":
-                # "not-in-word" < "in-word" < "correct"
-                if (match == "correct" && prev_match %in% c("not-in-word", "in-word")) {
-                  letter_matches[[letter]] <<- match
-                } else if (match == "in-word" && prev_match == "not-in-word") {
-                  letter_matches[[letter]] <<- match
-                }
-              }
-            }
-          )
-        })
-
-        letter_matches
-      })
-
-
-      keys <- list(
-        c("Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"),
-        c("A", "S", "D", "F", "G", "H", "J", "K", "L"),
-        c("Enter", "Z", "X", "C", "V", "B", "N", "M", "Back")
-      )
-
-      output$keyboard <- renderUI({
-        prev_match_type <- used_letters()
-        keyboard <- lapply(keys, function(row) {
-          row_keys <- lapply(row, function(key) {
-            class <- "key"
-            key_lower <- tolower(key)
-            if (!is.null(prev_match_type[[key_lower]])) {
-              class <- c(class, prev_match_type[[key_lower]])
-            }
-            if (key %in% c("Enter", "Back")) {
-              class <- c(class, "wide-key")
-            }
-            actionButton(key, key, class = class)
-          })
-          div(class = "keyboard-row", row_keys)
-        })
-
-        div(class = "keyboard", keyboard)
-      })
-
-      # Add listeners for each key, except Enter and Back
-      lapply(unlist(keys, recursive = FALSE), function(key) {
-        if (key %in% c("Enter", "Back")) return()
-        observeEvent(input[[key]], {
-          if (finished())
-            return()
-          cur <- current_guess_letters()
-          if (length(cur) >= isolate(nchar(target_word())))
-            return()
-          current_guess_letters(c(cur, tolower(key)))
-        })
-      })
-
-      observeEvent(input$Back, {
-        if (length(current_guess_letters()) > 0) {
-          current_guess_letters(current_guess_letters()[-length(current_guess_letters())])
-        }
-      })
-
-
-      output$endgame <- renderUI({
-        if (!finished())
-          return()
-
-        lines <- lapply(all_guesses(), function(guess) {
-          line <- vapply(guess$matches, function(match) {
-            switch(match,
-              "correct" = "🟩",
-              "in-word" = "🟨",
-              "not-in-word" = "⬜"
+  get_place <- function() {
+    placeRes <- tryCatch(try_place(input$Place,'continent',words),
+      error=function(e1) {
+        tryCatch(try_place(input$Place,'region',words),
+          error=function(e2) {
+            tryCatch(try_place(input$Place,'country',words),
+               error=function(e2) {
+                 try_place(input$Place,'settlement',words)
+               }
             )
-          }, character(1))
+          }
+        )
+      }
+    )
+    output$common <- renderText(placeRes$common)
+    words_today(list(words_today=placeRes$words_today,weights=placeRes$weights))
+    target_word(sample(placeRes$words_today, 1, prob=sqrt(placeRes$weights)))
+  }
 
-          div(paste(line, collapse = ""))
-        })
+  reset_game <- function() {
+    get_place()
+    all_guesses(list())
+    finished(FALSE)
+  }
 
-        div(class = "endgame-content", lines)
+  observeEvent(input$submit, {
+      get_place()
+      started(TRUE)
+  })
+
+  observeEvent(input$Enter, {
+    guess <- paste(current_guess_letters(), collapse = "")
+
+    if (! guess %in% words[,1])
+      return()
+
+    # if (input$hard) {
+    # # Letters in the target word that the player has previously
+    # # guessed correctly.
+    # matched_letters = used_letters().intersection(set(target_word()))
+    # if not set(guess).issuperset(matched_letters):
+    #     return
+    # }
+
+    all_guesses_new <- all_guesses()
+
+    check_result <- check_word(guess, target_word())
+    all_guesses_new[[length(all_guesses_new) + 1]] <- check_result
+    all_guesses(all_guesses_new)
+
+    if (isTRUE(check_result$win)) {
+        finished(TRUE)
+    }
+
+    current_guess_letters(character(0))
+  })
+
+  output$previous_guesses <- renderUI({
+    res <- lapply(all_guesses(), function(guess) {
+      letters <- guess$letters
+      row <- mapply(
+        letters,
+        guess$matches,
+        FUN = function(letter, match) {
+          # This will have the value "correct", "in-word", or "not-in-word", and
+          # those values are also used as CSS class names.
+          match_type <- match
+          div(toupper(letter), class = paste("letter", match_type))
+        },
+        SIMPLIFY = FALSE,
+        USE.NAMES = FALSE
+      )
+      div(class = "word", row)
+    })
+
+    scroll_js <- "
+        document.querySelector('.guesses')
+          .scrollTo(0, document.querySelector('.guesses').scrollHeight);
+    "
+    tagList(res, tags$script(HTML(scroll_js)))
+  })
+
+  output$current_guess <- renderUI({
+    if (!started()) return()
+    if (finished()) return()
+
+    letters <- current_guess_letters()
+
+    # Fill in blanks for letters up to length of target word. If letters is:
+    #   "a" "r"
+    # then result is:
+    #   "a" "r" "" "" ""
+    target_length <- isolate(nchar(target_word()))
+    if (length(letters) < target_length) {
+      letters[(length(letters)+1) : target_length] <- ""
+    }
+
+    div(
+      class = "word",
+      lapply(letters, function(letter) {
+        div(toupper(letter), class ="letter guess")
       })
+    )
+  })
+
+  output$new_game_ui <- renderUI({
+    if (!finished())
+      return()
+
+    actionButton("new_game", "New Game")
+  })
+
+  observeEvent(input$new_game, {
+    reset_game()
+  })
+
+  used_letters <- reactive({
+    # This is a named list. The structure will be something like:
+    # list(p = "not-in-word", a = "in-word", e = "correct")
+    letter_matches <- list()
+
+    # Populate `letter_matches` by iterating over all letters in all the guesses.
+    lapply(all_guesses(), function(guess) {
+      mapply(guess$letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE,
+        FUN = function(letter, match) {
+          prev_match <- letter_matches[[letter]]
+          if (is.null(prev_match)) {
+            # If there isn't an existing entry for that letter, just use it.
+            letter_matches[[letter]] <<- match
+          } else {
+            # If an entry is already present, it can be "upgraded":
+            # "not-in-word" < "in-word" < "correct"
+            if (match == "correct" && prev_match %in% c("not-in-word", "in-word")) {
+              letter_matches[[letter]] <<- match
+            } else if (match == "in-word" && prev_match == "not-in-word") {
+              letter_matches[[letter]] <<- match
+            }
+          }
+        }
+      )
+    })
+
+    letter_matches
+  })
+
+
+  keys <- list(
+    c("Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"),
+    c("A", "S", "D", "F", "G", "H", "J", "K", "L"),
+    c("Enter", "Z", "X", "C", "V", "B", "N", "M", "Back")
+  )
+
+  output$keyboard <- renderUI({
+    prev_match_type <- used_letters()
+    keyboard <- lapply(keys, function(row) {
+      row_keys <- lapply(row, function(key) {
+        class <- "key"
+        key_lower <- tolower(key)
+        if (!is.null(prev_match_type[[key_lower]])) {
+          class <- c(class, prev_match_type[[key_lower]])
+        }
+        if (key %in% c("Enter", "Back")) {
+          class <- c(class, "wide-key")
+        }
+        actionButton(key, key, class = class)
+      })
+      div(class = "keyboard-row", row_keys)
+    })
+
+    div(class = "keyboard", keyboard)
+  })
+
+  # Add listeners for each key, except Enter and Back
+  lapply(unlist(keys, recursive = FALSE), function(key) {
+    if (key %in% c("Enter", "Back")) return()
+    observeEvent(input[[key]], {
+      if (!started()) return()
+      if (finished()) return()
+      cur <- current_guess_letters()
+      if (length(cur) >= isolate(nchar(target_word())))
+        return()
+      current_guess_letters(c(cur, tolower(key)))
+    })
+  })
+
+  observeEvent(input$Back, {
+    if (length(current_guess_letters()) > 0) {
+      current_guess_letters(current_guess_letters()[-length(current_guess_letters())])
+    }
+  })
+
+
+  output$endgame <- renderUI({
+    if (!finished())
+      return()
+
+    lines <- lapply(all_guesses(), function(guess) {
+      line <- vapply(guess$matches, function(match) {
+        switch(match,
+          "correct" = "🟩",
+          "in-word" = "🟨",
+          "not-in-word" = "⬜"
+        )
+      }, character(1))
+
+      div(paste(line, collapse = ""))
+    })
+
+    div(class = "endgame-content", lines)
   })
 }
 
