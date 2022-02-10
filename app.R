@@ -184,7 +184,6 @@ ui <- fluidPage(
 
 server <- function(input, output) {
 
-  words_today <- reactiveVal(list())
   endExplain <- reactiveVal(character(0))
   target_word <- reactiveVal(character(0))
   all_guesses <- reactiveVal(list())
@@ -210,7 +209,7 @@ server <- function(input, output) {
       words_today <- tolower(words_today)
       words_today <- words_today[words_today %in% words[,1]]
       words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
-      if(length(words_today) <= 10) simpleError()
+      if(length(words_today) <= 5) simpleError()
       weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
       common <- common_names(words_today, obs)
       return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms observed in ',placename,' yesterday: ')))
@@ -222,7 +221,7 @@ server <- function(input, output) {
           words_today <- tolower(words_today)
           words_today <- words_today[words_today %in% words[,1]]
           words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
-          if(length(words_today) <= 10) simpleError()
+          if(length(words_today) <= 5) simpleError()
           weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
           common <- common_names(words_today, obs)
           return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms observed in ',placename,' on this date in all previous years: ')))
@@ -234,7 +233,7 @@ server <- function(input, output) {
             words_today <- tolower(words_today)
             words_today <- words_today[words_today %in% words[,1]]
             words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
-            if(length(words_today) <= 10) simpleError()
+            if(length(words_today) <= 5) simpleError()
             weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
             common <- common_names(words_today, obs)
             return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms observed in ',placename,' in this month in all previous years: ')))
@@ -271,13 +270,19 @@ server <- function(input, output) {
         )
       }
     )
-    newtarget <- sample(placeRes$words_today, 1, prob=sqrt(placeRes$weights))
+    newtarget <- sample(placeRes$words_today, 1, prob=1/(placeRes$weights+0.1))
     output$common <- renderText(paste0(placeRes$pretext, paste(placeRes$common,collapse=', ')))
     endExplain(paste0(paste0(tools::toTitleCase(newtarget), ' is the genus name of the '), sample(placeRes$obs$common_name[grepl(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)],1)))
     wordsRightLength <- words[nchar(words[,1]) == nchar(newtarget),1]
-    dists <- stringdist::stringdist(newtarget,wordsRightLength)
-    output$genera <- renderText(paste0('Genera of above, plus a random sample of global genera: ', paste(tools::toTitleCase(sample(c(placeRes$words_today, sample(wordsRightLength,100,prob=1/(dists+0.1)^3)))), collapse=', ')))
-    words_today(list(words_today=placeRes$words_today,weights=placeRes$weights))
+    hamm <- stringdist::stringdist(newtarget,wordsRightLength,method='hamming') + 0.01
+    notInToday <- !wordsRightLength %in% placeRes$words_today
+    closeByHamm <- sample(wordsRightLength[notInToday],min(25,sum(notInToday)),prob=1/hamm[notInToday]^4)
+    qgram <- stringdist::stringdist(newtarget,wordsRightLength,method='qgram',q=1) + 0.01
+    notInEither <- !wordsRightLength %in% c(placeRes$words_today,closeByHamm)
+    closeByQ <- sample(wordsRightLength[notInEither],min(25,sum(notInEither)),prob=(hamm[notInEither]/qgram[notInEither])^4)
+    notInAny <- !wordsRightLength %in% c(placeRes$words_today,closeByHamm,closeByQ)
+    farByQ <- sample(wordsRightLength[notInAny],min(50,sum(notInAny)),prob=qgram[notInAny]^4)
+    output$genera <- renderText(paste0('Genera of above, plus a random sample of global genera: ', paste(tools::toTitleCase(sample(c(placeRes$words_today, closeByHamm, closeByQ, farByQ))), collapse=', ')))
     target_word(newtarget)
   }
 
