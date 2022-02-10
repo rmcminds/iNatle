@@ -116,6 +116,7 @@ ui <- fluidPage(
     actionButton('submit','Submit'),
     textOutput('common'),
     h3("iNatle: Find the genus from the above common names"),
+    textOutput('genera'),
     uiOutput("previous_guesses"),
     uiOutput("current_guess"),
     uiOutput("endgame"),
@@ -239,6 +240,7 @@ server <- function(input, output) {
   }
 
   get_place <- function() {
+    output$common <- renderText('Getting organisms...')
     placeRes <- tryCatch(try_place(input$Place,'continent',words),
       error=function(e1) {
         tryCatch(try_place(input$Place,'region',words),
@@ -252,9 +254,11 @@ server <- function(input, output) {
         )
       }
     )
+    newtarget <- sample(placeRes$words_today, 1, prob=sqrt(placeRes$weights))
     output$common <- renderText(placeRes$common)
+    output$genera <- renderText(paste0('Genera of above, plus a random sample of global genera: ', paste(tools::toTitleCase(sample(c(placeRes$words_today, sample(words[nchar(words[,1]) == nchar(newtarget),1],20)))), collapse=', ')))
     words_today(list(words_today=placeRes$words_today,weights=placeRes$weights))
-    target_word(sample(placeRes$words_today, 1, prob=sqrt(placeRes$weights)))
+    target_word(newtarget)
   }
 
   reset_game <- function() {
