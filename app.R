@@ -276,7 +276,7 @@ server <- function(input, output) {
     endExplain(paste0(paste0(tools::toTitleCase(newtarget), ' is the genus name of the '), sample(placeRes$obs$common_name[grepl(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)],1)))
     wordsRightLength <- words[nchar(words[,1]) == nchar(newtarget),1]
     dists <- stringdist::stringdist(newtarget,wordsRightLength)
-    output$genera <- renderText(paste0('Genera of above, plus a random sample of global genera: ', paste(tools::toTitleCase(sample(c(placeRes$words_today, sample(wordsRightLength,20,prob=1/(dists+0.1)^3)))), collapse=', ')))
+    output$genera <- renderText(paste0('Genera of above, plus a random sample of global genera: ', paste(tools::toTitleCase(sample(c(placeRes$words_today, sample(wordsRightLength,100,prob=1/(dists+0.1)^3)))), collapse=', ')))
     words_today(list(words_today=placeRes$words_today,weights=placeRes$weights))
     target_word(newtarget)
   }
@@ -471,7 +471,8 @@ server <- function(input, output) {
       div(paste(line, collapse = ""))
     })
 
-    div(class = "endgame-content", c(lines,endExplain()))
+    div(class = "endgame-content", lines)
+    div(endExplain())
   })
 }
 
