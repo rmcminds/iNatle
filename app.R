@@ -185,6 +185,7 @@ ui <- fluidPage(
 server <- function(input, output) {
 
   words_today <- reactiveVal(list())
+  endExplain <- reactiveVal(character(0))
   target_word <- reactiveVal(character(0))
   all_guesses <- reactiveVal(list())
   started <- reactiveVal(FALSE)
@@ -193,10 +194,9 @@ server <- function(input, output) {
   finished <- reactiveVal(FALSE)
   current_guess_letters <- reactiveVal(character(0))
 
-  common_names <- function(words_today, obs, pretext) {
+  common_names <- function(words_today, obs) {
     out <- unique(unlist(sapply(words_today,function(x) obs$common_name[grepl(x,tolower(obs$scientific_name))])))
     out <- out[out != '']
-    out <- paste0(pretext, paste(out,collapse=', '))
     return(out)
   }
 
@@ -212,8 +212,8 @@ server <- function(input, output) {
       words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
       if(length(words_today) <= 10) simpleError()
       weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
-      common <- common_names(words_today, obs, paste0('Organisms observed in ',placename,' yesterday: '))
-      return(list(words_today=words_today,weights=weights,common=common))
+      common <- common_names(words_today, obs)
+      return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms observed in ',placename,' yesterday: ')))
     },
       error=function(e1) {
         tryCatch({
@@ -224,8 +224,8 @@ server <- function(input, output) {
           words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
           if(length(words_today) <= 10) simpleError()
           weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
-          common <- common_names(words_today, obs, paste0('Organisms observed in ',placename,' on this date in all previous years: '))
-          return(list(words_today=words_today,weights=weights,common=common))
+          common <- common_names(words_today, obs)
+          return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms observed in ',placename,' on this date in all previous years: ')))
         },
         error=function(e2) {
           tryCatch({
@@ -236,8 +236,8 @@ server <- function(input, output) {
             words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
             if(length(words_today) <= 10) simpleError()
             weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
-            common <- common_names(words_today, obs, paste0('Organisms observed in ',placename,' in this month in all previous years: '))
-            return(list(words_today=words_today,weights=weights,common=common))
+            common <- common_names(words_today, obs)
+            return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms observed in ',placename,' in this month in all previous years: ')))
           },
           error=function(e3) {
             obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]))
@@ -246,8 +246,8 @@ server <- function(input, output) {
             words_today <- words_today[words_today %in% words[,1]]
             words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
             weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
-            common <- common_names(words_today, obs, paste0('Organisms ever observed in ',placename,': '))
-            return(list(words_today=words_today,weights=weights,common=common))
+            common <- common_names(words_today, obs)
+            return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms ever observed in ',placename,': ')))
           }
           )
         }
@@ -272,7 +272,8 @@ server <- function(input, output) {
       }
     )
     newtarget <- sample(placeRes$words_today, 1, prob=sqrt(placeRes$weights))
-    output$common <- renderText(placeRes$common)
+    output$common <- renderText(paste0(placeRes$pretext, paste(placeRes$common,collapse=', ')))
+    endExplain(paste0(paste0(tools::toTitleCase(newtarget), ' is the genus name of the '), sample(placeRes$obs$common_name[grepl(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)],1)))
     wordsRightLength <- words[nchar(words[,1]) == nchar(newtarget),1]
     dists <- stringdist::stringdist(newtarget,wordsRightLength)
     output$genera <- renderText(paste0('Genera of above, plus a random sample of global genera: ', paste(tools::toTitleCase(sample(c(placeRes$words_today, sample(wordsRightLength,20,prob=1/(dists+0.1)^3)))), collapse=', ')))
@@ -470,7 +471,7 @@ server <- function(input, output) {
       div(paste(line, collapse = ""))
     })
 
-    div(class = "endgame-content", lines)
+    div(class = "endgame-content", c(lines,endExplain()))
   })
 }
 
