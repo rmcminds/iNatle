@@ -112,16 +112,24 @@ ui <- fluidPage(
   ")),
   div(
     class = "guesses",
-    textInput('Place', h3('Enter a place name'), value='Oregon', width='100%'),
-    actionButton('submit','Submit'),
-    textOutput('common'),
-    h3("iNatle: Find the genus from the above common names"),
-    textOutput('genera'),
-    uiOutput("previous_guesses"),
-    uiOutput("current_guess"),
-    uiOutput("endgame"),
-    uiOutput("new_game_ui"),
-    uiOutput("keyboard")
+    h3("iNatle"),
+    conditionalPanel(
+      condition = "!output.started",
+      textInput('Place', h3('Enter a place name'), value='Oregon', width='100%'),
+      actionButton('submit','Submit')
+    ),
+    conditionalPanel(
+      condition = "output.started",
+      h3("The target genus is drawn from these local organisms"),
+      textOutput('common'),
+      h3("And is equal to one of these genera"),
+      textOutput('genera'),
+      uiOutput("previous_guesses"),
+      uiOutput("current_guess"),
+      uiOutput("endgame"),
+      uiOutput("new_game_ui"),
+      uiOutput("keyboard")
+    )
   ),
   # div(
   #   style="display: inline-block;",
@@ -180,6 +188,8 @@ server <- function(input, output) {
   target_word <- reactiveVal(character(0))
   all_guesses <- reactiveVal(list())
   started <- reactiveVal(FALSE)
+  output$started <- reactive({started()})
+  outputOptions(output, "started", suspendWhenHidden = FALSE)
   finished <- reactiveVal(FALSE)
   current_guess_letters <- reactiveVal(character(0))
 
@@ -270,6 +280,7 @@ server <- function(input, output) {
   observeEvent(input$submit, {
       get_place()
       started(TRUE)
+      output$started <- reactive({started()})
   })
 
   observeEvent(input$Enter, {
