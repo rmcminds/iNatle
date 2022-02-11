@@ -127,6 +127,7 @@ ui <- fluidPage(
       uiOutput("previous_guesses"),
       uiOutput("current_guess"),
       uiOutput("endgame"),
+      uiOutput("endgame2"),
       uiOutput("new_game_ui"),
       uiOutput("keyboard")
     )
@@ -271,8 +272,11 @@ server <- function(input, output) {
       }
     )
     newtarget <- sample(placeRes$words_today, 1, prob=1/(placeRes$weights+0.1))
+    refObs <- grep(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)
+    if(length(refObs) > 1) refObs <- sample(refObs,1)
+    output$iurl <- renderText({c('<a href="',placeRes$obs$url[refObs],'"><img src="',placeRes$obs$image_url[refObs],'"></a>')})
     output$common <- renderText(paste0(placeRes$pretext, paste(placeRes$common,collapse=', ')))
-    endExplain(paste0(paste0(tools::toTitleCase(newtarget), ' is the genus name of the '), sample(placeRes$obs$common_name[grepl(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)],1)))
+    endExplain(paste0(paste0(tools::toTitleCase(newtarget), ' is the genus name of the '), placeRes$obs$common_name[refObs]))
     wordsRightLength <- words[nchar(words[,1]) == nchar(newtarget),1]
     hamm <- stringdist::stringdist(newtarget,wordsRightLength,method='hamming') + 0.01
     notInToday <- !wordsRightLength %in% placeRes$words_today
@@ -376,7 +380,6 @@ server <- function(input, output) {
   output$new_game_ui <- renderUI({
     if (!finished())
       return()
-
     actionButton("new_game", "New Game")
   })
 
@@ -477,7 +480,15 @@ server <- function(input, output) {
     })
 
     div(class = "endgame-content", lines)
-    div(endExplain())
+  })
+
+  output$endgame2 <- renderUI({
+    if (!finished())
+      return()
+    div(
+      endExplain(),
+      htmlOutput('iurl')
+    )
   })
 }
 
