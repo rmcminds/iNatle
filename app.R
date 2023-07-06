@@ -200,54 +200,67 @@ server <- function(input, output) {
     return(out)
   }
 
-  ##might want to add an option to draw a boundary using leaflet
-  try_place <- function(placename,placelevel,words) {
-    placeBB <- osmdata::getbb(placename,featuretype=placelevel)
-    if(any(is.na(placeBB))) simpleError()
-    tryCatch({
-      obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]), year = as.numeric(format(Sys.Date()-1,"%Y")), month = as.numeric(format(Sys.Date()-1,"%m")), day = as.numeric(format(Sys.Date()-1,"%d")))
-      words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
+  try_date <- function(obs) {
+
+      words_today <- unique(sapply(obs$scientific_name, \(x) strsplit(x,' ')[[1]][1]))
       words_today <- tolower(words_today)
       words_today <- words_today[words_today %in% words[,1]]
-      words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
+      words_today <- words_today[order(words[match(words_today, words[,1]),2], decreasing = TRUE)]
+
       if(length(words_today) <= 5) simpleError()
-      weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
+
+      weights <- sapply(words_today, \(x) sum(grepl(x, tolower(obs$scientific_name))))
       common <- common_names(words_today, obs)
-      return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms observed in ',placename,' yesterday: ')))
+
+      return(list(words_today = words_today,
+                  weights     = weights,
+                  common      = common,
+                  obs         = obs))
+
+  }
+
+  ##might want to add an option to draw a boundary using leaflet
+  try_place <- function(placename, placelevel, words) {
+
+    placeBB <- osmdata::getbb(placename, featuretype = placelevel)
+    if(any(is.na(placeBB))) simpleError()
+
+    tryCatch({
+
+      obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]),
+                                 year   = as.numeric(format(Sys.Date() - 1, "%Y")),
+                                 month  = as.numeric(format(Sys.Date() - 1, "%m")),
+                                 day    = as.numeric(format(Sys.Date() - 1, "%d")))
+
+      return(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' yesterday: ')))
+
     },
-      error=function(e1) {
+      error = function(e1) {
         tryCatch({
-          obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]), month = as.numeric(format(Sys.Date(),"%m")), day = as.numeric(format(Sys.Date(),"%d")))
-          words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
-          words_today <- tolower(words_today)
-          words_today <- words_today[words_today %in% words[,1]]
-          words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
-          if(length(words_today) <= 5) simpleError()
-          weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
-          common <- common_names(words_today, obs)
-          return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms observed in ',placename,' on this date in all previous years: ')))
+
+          obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]),
+                                     month  = as.numeric(format(Sys.Date(), "%m")),
+                                     day    = as.numeric(format(Sys.Date(), "%d")))
+
+          return(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' on this date in all previous years: ')))
+
         },
-        error=function(e2) {
+        error = function(e2) {
           tryCatch({
-            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]), month = as.numeric(format(Sys.Date(),"%m")))
-            words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
-            words_today <- tolower(words_today)
-            words_today <- words_today[words_today %in% words[,1]]
-            words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
-            if(length(words_today) <= 5) simpleError()
-            weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
-            common <- common_names(words_today, obs)
-            return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms observed in ',placename,' in this month in all previous years: ')))
+
+            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]),
+                                       month = as.numeric(format(Sys.Date(), "%m")))
+
+            return(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' in this month in all previous years: ')))
+
           },
           error=function(e3) {
-            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1],placeBB[2:1,2]))
-            words_today <- unique(sapply(obs$scientific_name, function(x) strsplit(x,' ')[[1]][1]))
-            words_today <- tolower(words_today)
-            words_today <- words_today[words_today %in% words[,1]]
-            words_today <- words_today[order(words[match(words_today,words[,1]),2],decreasing=TRUE)]
-            weights <- sapply(words_today,function(x) sum(grepl(x,tolower(obs$scientific_name))))
-            common <- common_names(words_today, obs)
-            return(list(words_today=words_today,weights=weights,common=common,obs=obs,pretext=paste0('Organisms ever observed in ',placename,': ')))
+
+            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]))
+
+
+            return(c(try_date(obs), pretext = paste0('Organisms ever observed in ', placename, ': ')))
+
           }
           )
         }
@@ -257,37 +270,52 @@ server <- function(input, output) {
   }
 
   get_place <- function() {
+
     output$common <- renderText('Getting organisms...')
-    placeRes <- tryCatch(try_place(input$Place,'continent',words),
-      error=function(e1) {
-        tryCatch(try_place(input$Place,'region',words),
-          error=function(e2) {
-            tryCatch(try_place(input$Place,'country',words),
-               error=function(e2) {
-                 try_place(input$Place,'settlement',words)
+
+    placeRes <- tryCatch(try_place(input$Place, 'continent', words),
+      error = function(e1) {
+        tryCatch(try_place(input$Place, 'region', words),
+          error = function(e2) {
+            tryCatch(try_place(input$Place, 'country', words),
+               error = function(e2) {
+                 try_place(input$Place, 'settlement', words)
                }
             )
           }
         )
       }
     )
-    newtarget <- sample(placeRes$words_today, 1, prob=1/(placeRes$weights+0.1))
+
+    newtarget <- sample(placeRes$words_today, 1, prob = 1 / (placeRes$weights + 0.1))
+
     refObs <- grep(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)
+
     if(length(refObs) > 1) refObs <- sample(refObs,1)
-    output$iurl <- renderText({c('<a href="',placeRes$obs$url[refObs],'"><img src="',placeRes$obs$image_url[refObs],'"></a>')})
-    output$common <- renderText(paste0(placeRes$pretext, paste(placeRes$common,collapse=', ')))
+
+    output$iurl <- renderText({c('<a href="', placeRes$obs$url[refObs], '" target="_blank"><img src="', placeRes$obs$image_url[refObs], '"></a>')})
+    output$common <- renderText(paste0(placeRes$pretext, paste(placeRes$common, collapse = ', ')))
+
     endExplain(paste0(paste0(tools::toTitleCase(newtarget), ' is the genus name of the '), placeRes$obs$common_name[refObs]))
+
     wordsRightLength <- words[nchar(words[,1]) == nchar(newtarget),1]
+
     hamm <- stringdist::stringdist(newtarget,wordsRightLength,method='hamming') + 0.01
     notInToday <- !wordsRightLength %in% placeRes$words_today
-    closeByHamm <- sample(wordsRightLength[notInToday],min(25,sum(notInToday)),prob=1/hamm[notInToday]^4)
-    qgram <- stringdist::stringdist(newtarget,wordsRightLength,method='qgram',q=1) + 0.01
+    closeByHamm <- sample(wordsRightLength[notInToday], min(25,sum(notInToday)), prob = 1 / hamm[notInToday]^4)
+
+    qgram <- stringdist::stringdist(newtarget, wordsRightLength, method = 'qgram', q = 1) + 0.01
     notInEither <- !wordsRightLength %in% c(placeRes$words_today,closeByHamm)
-    closeByQ <- sample(wordsRightLength[notInEither],min(25,sum(notInEither)),prob=(hamm[notInEither]/qgram[notInEither])^4)
-    notInAny <- !wordsRightLength %in% c(placeRes$words_today,closeByHamm,closeByQ)
-    farByQ <- sample(wordsRightLength[notInAny],min(50,sum(notInAny)),prob=qgram[notInAny]^4)
-    output$genera <- renderText(paste0('Genera of above, plus a random sample of global genera: ', paste(tools::toTitleCase(sample(c(placeRes$words_today, closeByHamm, closeByQ, farByQ))), collapse=', ')))
+    closeByQ <- sample(wordsRightLength[notInEither], min(25,sum(notInEither)), prob = (hamm[notInEither] / qgram[notInEither])^4)
+
+    notInAny <- !wordsRightLength %in% c(placeRes$words_today, closeByHamm, closeByQ)
+    farByQ <- sample(wordsRightLength[notInAny], min(50,sum(notInAny)), prob = qgram[notInAny]^4)
+
+    output$genera <- renderText(paste0('Genera of above, plus a random sample of global genera: ',
+                                paste(tools::toTitleCase(sample(c(placeRes$words_today, closeByHamm, closeByQ, farByQ))),
+                                      collapse = ', ')))
     target_word(newtarget)
+
   }
 
   reset_game <- function() {
