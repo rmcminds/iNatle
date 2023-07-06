@@ -319,7 +319,6 @@ server <- function(input, output) {
   }
 
   reset_game <- function() {
-    get_place()
     all_guesses(list())
     finished(FALSE)
   }
@@ -412,6 +411,8 @@ server <- function(input, output) {
   })
 
   observeEvent(input$new_game, {
+    started(FALSE)
+    output$started <- reactive({started()})
     reset_game()
   })
 
