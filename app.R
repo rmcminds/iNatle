@@ -14,14 +14,14 @@ ui <- fluidPage(
         height: calc(100vh - 30px);
         display: grid;
         grid-template-rows: 1fr auto;
-        overflow-y: scroll;
+        overflow-y: auto;
     }
     .guesses {
-        overflow-y: scroll;
+        overflow-y: auto;
         height: 100%;
     }
     .guesses.finished {
-        overflow-y: scroll;
+        overflow-y: auto;
     }
     .guesses .word {
         margin: 5px;
