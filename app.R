@@ -11,10 +11,11 @@ ui <- fluidPage(
     .container-fluid {
         text-align: center;
         vertical-align: top;
-        height: calc(100vh - 30px);
+        height: calc(100% - 30px);
         display: grid;
         grid-template-rows: 1fr auto;
         overflow-y: auto;
+        width: fit-content;
     }
     .guesses {
         overflow-y: auto;
@@ -112,7 +113,6 @@ ui <- fluidPage(
   ")),
   div(
     class = "guesses",
-    h2("iNatle"),
     conditionalPanel(
       condition = "!output.started",
       textInput('Place', h3('Enter a place name'), value='Oregon', width='100%'),
@@ -137,6 +137,14 @@ ui <- fluidPage(
   #   checkboxInput("hard", "Hard mode")
   # ),
   tags$script(HTML("
+
+    // fetch osmdata
+    Shiny.addCustomMessageHandler('req-url', function(rurl) {
+      fetch(rurl)
+       .then(res => res.json())
+       .then(json => Shiny.setInputValue('obj', json, {priority: 'event'}))
+    });
+
     const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
                      'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
     const all_key_ids = [ ...letters, 'Enter', 'Back'];
@@ -183,7 +191,7 @@ ui <- fluidPage(
 )
 
 
-server <- function(input, output) {
+server <- function(input, output, session) {
 
   endExplain <- reactiveVal(character(0))
   target_word <- reactiveVal(character(0))
@@ -193,6 +201,10 @@ server <- function(input, output) {
   outputOptions(output, "started", suspendWhenHidden = FALSE)
   finished <- reactiveVal(FALSE)
   current_guess_letters <- reactiveVal(character(0))
+  current_placelevel <- reactiveVal(1)
+  setplace <- reactiveVal(matrix(0, nrow=2, ncol=2))
+
+  placelevels <- c('continent','region','country','settlement')
 
   common_names <- function(words_today, obs) {
     out <- unique(unlist(sapply(words_today,function(x) obs$common_name[grepl(x,tolower(obs$scientific_name))])))
@@ -222,70 +234,19 @@ server <- function(input, output) {
   ##might want to add an option to draw a boundary using leaflet
   try_place <- function(placename, placelevel, words) {
 
-    placeBB <- osmdata::getbb(placename, featuretype = placelevel)
-    if(any(is.na(placeBB))) simpleError()
+    ## build a query
+    req <- httr2::request ("https://nominatim.openstreetmap.org/search")
+    req <- httr2::req_method (req, "POST")
+    req <- httr2::req_url_query (req, format = "json")
+    req <- httr2::req_url_query (req, q = placename)
+    req <- httr2::req_url_query (req, featuretype = tolower(placelevel))
 
-    tryCatch({
+    # Send the request string to the browser
+    session$sendCustomMessage("req-url", as.character(req[[1]]))
 
-      obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]),
-                                 year   = as.numeric(format(Sys.Date() - 1, "%Y")),
-                                 month  = as.numeric(format(Sys.Date() - 1, "%m")),
-                                 day    = as.numeric(format(Sys.Date() - 1, "%d")))
-
-      return(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' yesterday: ')))
-
-    },
-      error = function(e1) {
-        tryCatch({
-
-          obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]),
-                                     month  = as.numeric(format(Sys.Date(), "%m")),
-                                     day    = as.numeric(format(Sys.Date(), "%d")))
-
-          return(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' on this date in all previous years: ')))
-
-        },
-        error = function(e2) {
-          tryCatch({
-
-            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]),
-                                       month = as.numeric(format(Sys.Date(), "%m")))
-
-            return(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' in this month in all previous years: ')))
-
-          },
-          error=function(e3) {
-
-            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]))
-
-
-            return(c(try_date(obs), pretext = paste0('Organisms ever observed in ', placename, ': ')))
-
-          }
-          )
-        }
-        )
-      }
-    )
   }
 
-  get_place <- function() {
-
-    output$common <- renderText('Getting organisms...')
-
-    placeRes <- tryCatch(try_place(input$Place, 'continent', words),
-      error = function(e1) {
-        tryCatch(try_place(input$Place, 'region', words),
-          error = function(e2) {
-            tryCatch(try_place(input$Place, 'country', words),
-               error = function(e2) {
-                 try_place(input$Place, 'settlement', words)
-               }
-            )
-          }
-        )
-      }
-    )
+  assemble_game <- function(placeRes) {
 
     newtarget <- sample(placeRes$words_today, 1, prob = 1 / (placeRes$weights + 0.1))
 
@@ -318,15 +279,82 @@ server <- function(input, output) {
 
   }
 
+  start_game <- function() {
+
+    started(TRUE)
+    output$started <- reactive({started()})
+    placeBB <- setplace()
+    placename <- input$Place
+
+    tryCatch({
+
+      obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]),
+                                 year   = as.numeric(format(Sys.Date() - 1, "%Y")),
+                                 month  = as.numeric(format(Sys.Date() - 1, "%m")),
+                                 day    = as.numeric(format(Sys.Date() - 1, "%d")))
+      assemble_game(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' yesterday: ')))
+
+    },
+      error = function(e1) {
+        tryCatch({
+
+          obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]),
+                                     month  = as.numeric(format(Sys.Date(), "%m")),
+                                     day    = as.numeric(format(Sys.Date(), "%d")))
+          assemble_game(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' on this date in all previous years: ')))
+
+        },
+        error = function(e2) {
+          tryCatch({
+
+            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]),
+                                       month = as.numeric(format(Sys.Date(), "%m")))
+            assemble_game(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' in this month in all previous years: ')))
+
+          },
+          error=function(e3) {
+
+            obs <- rinat::get_inat_obs(bounds = c(placeBB[2:1,1], placeBB[2:1,2]))
+            assemble_game(c(try_date(obs), pretext = paste0('Organisms ever observed in ', placename, ': ')))
+
+          }
+          )
+        }
+        )
+      }
+    )
+
+  }
+
   reset_game <- function() {
     all_guesses(list())
+    current_placelevel(1)
     finished(FALSE)
   }
 
   observeEvent(input$submit, {
-      get_place()
-      started(TRUE)
-      output$started <- reactive({started()})
+      try_place(input$Place, current_placelevel(), words)
+  })
+
+  observeEvent(input$obj, {
+
+    bn <- as.numeric(input$obj[5:8]) ## relies on json result being very consistent in which values correspond to the bounding boxes...
+    placeBB <- matrix(c(bn[3:4], bn[1:2]), nrow = 2, byrow = TRUE)
+    dimnames(placeBB) <- list(c("x", "y"), c("min", "max"))
+
+    if(any(is.na(placeBB))) {
+
+      ## try next
+      current_placelevel(placelevels[[current_placelevel() + 1]])
+      try_place(input$Place, current_placelevel(), words)
+
+    } else {
+
+      setplace(placeBB)
+      start_game()
+
+    }
+
   })
 
   observeEvent(input$Enter, {
