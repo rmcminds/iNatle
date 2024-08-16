@@ -4,4 +4,4 @@ An implementation of the popular game [Wordle](https://www.powerlanguage.co.uk/w
 
 Version from which rmcminds forked: [deployed app](https://winston.shinyapps.io/wordle/)
 
-Current iNatle: [code]() [deployed app](https://merdemicrobes.com/iNatle)
+Current iNatle: [code]() [deployed app](https://thecnidaegritty.org/iNatle)
