@@ -16,8 +16,15 @@ ui <- fluidPage(
     class = "guesses",
     conditionalPanel(
       condition = "!output.started",
+      h3("Set up!"),
+      HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
       textInput('Place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
-      actionButton('submit', 'Submit')
+      textInput('Taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'")), value = 'Plantae', width = '100%'),
+      actionButton('submit', 'Submit'),
+      conditionalPanel(
+        condition = "output.error",
+        HTML('<br>Not enough observations or species; try again')
+      )
     ),
     conditionalPanel(
       condition = "output.started",
@@ -71,46 +78,46 @@ get_inat_obs_nocurl <- function(query = NULL, taxon_name = NULL, taxon_id = NULL
     # Construct the query parameters
     params <- list()
 
-    if (!is.null(query)) params$query <- query
-    if (!is.null(taxon_name)) params$taxon_name <- taxon_name
-    if (!is.null(taxon_id)) params$taxon_id <- taxon_id
-    if (!is.null(place_id)) params$place_id <- place_id
-    if (!is.null(quality)) {
-        if (!quality %in% c("casual", "research")) {
-            stop("Invalid quality flag. Use 'casual' or 'research'.")
-        }
-        params$quality_grade <- quality
+    if(!is.null(query)) params$query <- query
+    if(!is.null(taxon_name)) params$taxon_name <- taxon_name
+    if(!is.null(taxon_id)) params$taxon_id <- taxon_id
+    if(!is.null(place_id)) params$place_id <- place_id
+    if(!is.null(quality)) {
+      if(!quality %in% c("casual", "research")) {
+        stop("Invalid quality flag. Use 'casual' or 'research'.")
+      }
+      params$quality_grade <- quality
     }
-    if (!is.null(geo) && geo) params$has <- "geo"
-    if (!is.null(annotation)) {
-        if (length(annotation) != 2 || !all(grepl("\\d+", annotation))) {
-            stop("annotation needs to be a vector of length 2 with numeric IDs.")
-        }
-        params$term_id <- annotation[1]
-        params$term_value_id <- annotation[2]
+    if(!is.null(geo) && geo) params$has <- "geo"
+    if(!is.null(annotation)) {
+      if(length(annotation) != 2 || !all(grepl("\\d+", annotation))) {
+          stop("annotation needs to be a vector of length 2 with numeric IDs.")
+      }
+      params$term_id <- annotation[1]
+      params$term_value_id <- annotation[2]
     }
-    if (!is.null(year)) params$year <- year
-    if (!is.null(month)) {
-        month <- as.numeric(month)
-        if (month < 1 || month > 12) stop("Month must be between 1 and 12.")
-        params$month <- month
+    if(!is.null(year)) params$year <- year
+    if(!is.null(month)) {
+      month <- as.numeric(month)
+      if(month < 1 || month > 12) stop("Month must be between 1 and 12.")
+      params$month <- month
     }
-    if (!is.null(day)) {
-        day <- as.numeric(day)
-        if (day < 1 || day > 31) stop("Day must be between 1 and 31.")
-        params$day <- day
+    if(!is.null(day)) {
+      day <- as.numeric(day)
+      if(day < 1 || day > 31) stop("Day must be between 1 and 31.")
+      params$day <- day
     }
-    if (!is.null(bounds)) {
-        if (length(bounds) != 4) stop("Bounds must have 4 coordinates.")
-        bounds <- unname(bounds)
-        params$swlat <- bounds[1]
-        params$swlng <- bounds[2]
-        params$nelat <- bounds[3]
-        params$nelng <- bounds[4]
+    if(!is.null(bounds)) {
+      if(length(bounds) != 4) stop("Bounds must have 4 coordinates.")
+      bounds <- unname(bounds)
+      params$swlat <- bounds[1]
+      params$swlng <- bounds[2]
+      params$nelat <- bounds[3]
+      params$nelng <- bounds[4]
     }
 
     # Limit maxresults to 10000
-    if (maxresults > 10000) stop("maxresults must be <= 10000.")
+    if(maxresults > 10000) stop("maxresults must be <= 10000.")
 
     # Create URL with query parameters
     search <- paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&")
@@ -118,31 +125,32 @@ get_inat_obs_nocurl <- function(query = NULL, taxon_name = NULL, taxon_id = NULL
     # Function to perform GET request and handle response
     get_data <- function(url, maxresults) {
 
-        # Fetch results
-        q_path <- "observations.csv"
-        page_url <- paste0(base_url, q_path, '?', search, "&page=1&per_page=200")
-        data_out <- read.csv(page_url, stringsAsFactors = FALSE)
+      # Fetch results
+      q_path <- "observations.csv"
+      page_url <- paste0(base_url, q_path, '?', search, "&page=1&per_page=200")
+      data_out <- read.csv(page_url, stringsAsFactors = FALSE)
 
-        if (maxresults > 200) {
-            for (i in 2:ceiling(maxresults / 200)) {
-                page_url <- paste0(base_url, q_path, '?', search, "&page=", i, "&per_page=200")
-                data_out <- rbind(data_out, read.csv(page_url, stringsAsFactors = FALSE))
-                if(nrow(data_out) <= maxresults) break
-            }
-        }
+      if(maxresults > 200) {
+          for(i in 2:ceiling(maxresults / 200)) {
+              page_url <- paste0(base_url, q_path, '?', search, "&page=", i, "&per_page=200")
+              data_out <- rbind(data_out, read.csv(page_url, stringsAsFactors = FALSE))
+              if(nrow(data_out) <= maxresults) break
+          }
+      }
 
-        return(data_out)
+      return(data_out)
+
     }
 
     # Fetch data
     data_out <- get_data(query_url, maxresults)
 
     # Return results
-    if (meta) {
-        return(list(meta = list(found = nrow(data_out), returned = nrow(data_out)),
-                    data = data_out))
+    if(meta) {
+      return(list(meta = list(found = nrow(data_out), returned = nrow(data_out)),
+                  data = data_out))
     } else {
-        return(data_out)
+      return(data_out)
     }
 }
 
@@ -156,6 +164,7 @@ server <- function(input, output, session) {
   target_word           <- reactiveVal(character(0))
   all_guesses           <- reactiveVal(list())
   started               <- reactiveVal(FALSE)
+  error                 <- reactiveVal(FALSE)
   finished              <- reactiveVal(FALSE)
   current_guess_letters <- reactiveVal(character(0))
   current_placelevel    <- reactiveVal(1)
@@ -166,6 +175,9 @@ server <- function(input, output, session) {
   # Observing whether the game has started
   output$started <- reactive({started()})
   outputOptions(output, "started", suspendWhenHidden = FALSE)
+
+  output$error <- reactive({error()})
+  outputOptions(output, "error", suspendWhenHidden = FALSE)
 
   # Function Definitions
   common_names <- function(words_today, obs) {
@@ -180,7 +192,7 @@ server <- function(input, output, session) {
     words_today <- words_today[words_today %in% words[, 1]]
     words_today <- words_today[order(words[match(words_today, words[, 1]), 2], decreasing = TRUE)]
 
-    if(length(words_today) <= 5) stop(simpleError())
+    if(length(words_today) <= 5) stop(simpleError('No observations'))
 
     weights <- sapply(words_today, \(x) sum(grepl(x, tolower(obs$scientific_name))))
     common <- common_names(words_today, obs)
@@ -207,45 +219,55 @@ server <- function(input, output, session) {
     placeBB <- matrix(c(bn[3:4], bn[1:2]), nrow = 2, byrow = TRUE)
     dimnames(placeBB) <- list(c("x", "y"), c("min", "max"))
 
-    if (any(is.na(placeBB))) {
+    if(any(is.na(placeBB))) {
 
       current_placelevel(placelevels[[current_placelevel() + 1]])
       try_place(input$Place, current_placelevel(), words)
 
     } else {
 
-      started(TRUE)
-      output$started <- reactive({started()})
-
       tryCatch({
         obs <- get_inat_obs_nocurl(
+          taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
           bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]),
           year   = as.numeric(format(Sys.Date() - 1, "%Y")),
           month  = as.numeric(format(Sys.Date() - 1, "%m")),
           day    = as.numeric(format(Sys.Date() - 1, "%d"))
         )
         assemble_game(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' yesterday: ')))
+        started(TRUE)
+        output$started <- reactive({started()})
 
       }, error = function(e1) {
         tryCatch({
           obs <- get_inat_obs_nocurl(
+            taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
             bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]),
             month  = as.numeric(format(Sys.Date(), "%m")),
             day    = as.numeric(format(Sys.Date(), "%d"))
           )
           assemble_game(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' on this date in all previous years: ')))
+          started(TRUE)
+          output$started <- reactive({started()})
 
         }, error = function(e2) {
           tryCatch({
             obs <- get_inat_obs_nocurl(
+              taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
               bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]),
               month = as.numeric(format(Sys.Date(), "%m"))
             )
             assemble_game(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' in this month in all previous years: ')))
+            started(TRUE)
+            output$started <- reactive({started()})
 
           }, error = function(e3) {
-            obs <- get_inat_obs_nocurl(bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]))
-            assemble_game(c(try_date(obs), pretext = paste0('Organisms ever observed in ', placename, ': ')))
+            tryCatch({
+              obs <- get_inat_obs_nocurl(
+                taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
+                bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]))
+              assemble_game(c(try_date(obs), pretext = paste0('Organisms ever observed in ', placename, ': ')))
+            }, error = function(e4) {error(TRUE); reset_game()})
           })
         })
       })
@@ -257,7 +279,7 @@ server <- function(input, output, session) {
     newtarget <- sample(placeRes$words_today, 1, prob = 1 / (placeRes$weights + 0.1))
     refObs <- grep(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)
 
-    if (length(refObs) > 1) refObs <- sample(refObs, 1)
+    if(length(refObs) > 1) refObs <- sample(refObs, 1)
 
     output$iurl <- renderText({
       c('<a href="', placeRes$obs$url[refObs], '" target="_blank"><img src="', placeRes$obs$image_url[refObs], '"></a>')
@@ -301,31 +323,12 @@ server <- function(input, output, session) {
     try_place(input$Place, current_placelevel(), words)
   })
 
-  observeEvent(input$Enter, {
-    guess <- paste(current_guess_letters(), collapse = "")
-
-    if (!guess %in% words[, 1]) return()
-
-    all_guesses_new <- all_guesses()
-    check_result <- check_word(guess, target_word())
-    all_guesses_new[[length(all_guesses_new) + 1]] <- check_result
-    all_guesses(all_guesses_new)
-
-    if (isTRUE(check_result$win)) finished(TRUE)
-
-    current_guess_letters(character(0))
-  })
-
   observeEvent(input$new_game, {
     started(FALSE)
+    error(FALSE)
     output$started <- reactive({started()})
+    output$error <- reactive({error()})
     reset_game()
-  })
-
-  observeEvent(input$Back, {
-    if (length(current_guess_letters()) > 0) {
-      current_guess_letters(current_guess_letters()[-length(current_guess_letters())])
-    }
   })
 
   # Rendering UI Elements
@@ -344,12 +347,12 @@ server <- function(input, output, session) {
   })
 
   output$current_guess <- renderUI({
-    if (!started() || finished()) return()
+    if(!started() || finished()) return()
 
     letters <- current_guess_letters()
     target_length <- isolate(nchar(target_word()))
 
-    if (length(letters) < target_length) {
+    if(length(letters) < target_length) {
       letters[(length(letters) + 1):target_length] <- ""
     }
 
@@ -362,7 +365,7 @@ server <- function(input, output, session) {
   })
 
   output$new_game_ui <- renderUI({
-    if (finished()) {
+    if(finished()) {
       actionButton("new_game", "New Game")
     }
   })
@@ -380,7 +383,7 @@ server <- function(input, output, session) {
       mapply(guess$letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE,
              FUN = function(letter, match) {
                prev_match <- letter_matches[[letter]]
-               if (is.null(prev_match) || (match == "correct" && prev_match != "correct") ||
+               if(is.null(prev_match) || (match == "correct" && prev_match != "correct") ||
                    (match == "in-word" && prev_match == "not-in-word")) {
                  letter_matches[[letter]] <<- match
                }
@@ -402,10 +405,10 @@ server <- function(input, output, session) {
       row_keys <- lapply(row, function(key) {
         class <- "key"
         key_lower <- tolower(key)
-        if (!is.null(prev_match_type[[key_lower]])) {
+        if(!is.null(prev_match_type[[key_lower]])) {
           class <- c(class, prev_match_type[[key_lower]])
         }
-        if (key %in% c("Enter", "Back")) {
+        if(key %in% c("Enter", "Back")) {
           class <- c(class, "wide-key")
         }
         actionButton(key, key, class = class)
@@ -421,25 +424,39 @@ server <- function(input, output, session) {
 
   observeKeyPress <- function(key) {
     observeEvent(input[[key]], {
-      if (!started() || finished()) return()
+      if(!started() || finished()) return()
       cur <- current_guess_letters()
-      if (length(cur) < isolate(nchar(target_word()))) {
+      if(length(cur) < isolate(nchar(target_word()))) {
         current_guess_letters(c(cur, tolower(key)))
       }
     })
   }
 
-  # Add listeners for each key, except Enter and Back
+  # Add listeners foreach key, except Enter and Back
   lapply(unlist(keys, recursive = FALSE), function(key) {
-    if (key %in% c("Enter", "Back")) return()
+    if(key %in% c("Enter", "Back")) return()
     observeKeyPress(key)
   })
 
   observeEvent(input$Back, {
-    cur <- current_guess_letters()
-    if (length(cur) > 0) {
-      current_guess_letters(cur[-length(cur)])
+    if(length(current_guess_letters()) > 0) {
+      current_guess_letters(current_guess_letters()[-length(current_guess_letters())])
     }
+  })
+
+  observeEvent(input$Enter, {
+    guess <- paste(current_guess_letters(), collapse = "")
+
+    if(!guess %in% words[, 1]) return()
+
+    all_guesses_new <- all_guesses()
+    check_result <- check_word(guess, target_word())
+    all_guesses_new[[length(all_guesses_new) + 1]] <- check_result
+    all_guesses(all_guesses_new)
+
+    if(isTRUE(check_result$win)) finished(TRUE)
+
+    current_guess_letters(character(0))
   })
 
   renderEndgameUI <- function(guesses) {
@@ -462,13 +479,13 @@ server <- function(input, output, session) {
   })
 
   output$endgame <- renderUI({
-    if (finished()) {
+    if(finished()) {
       renderEndgameUI(all_guesses())
     }
   })
 
   output$endgame2 <- renderUI({
-    if (finished()) {
+    if(finished()) {
       div(
         endExplain()
       )
@@ -480,23 +497,23 @@ check_word <- function(guess_str, target_str) {
   guess <- strsplit(guess_str, "")[[1]]
   target <- strsplit(target_str, "")[[1]]
 
-  if (length(guess) != length(target)) {
+  if(length(guess) != length(target)) {
     stop("Word lengths don't match.")
   }
 
   result <- rep("not-in-word", length(guess))
   remaining <- character(0)
 
-  for (i in seq_along(guess)) {
-    if (guess[i] == target[i]) {
+  for(i in seq_along(guess)) {
+    if(guess[i] == target[i]) {
       result[i] <- "correct"
     } else {
       remaining <- c(remaining, target[i])
     }
   }
 
-  for (i in seq_along(guess)) {
-    if (guess[i] != target[i] && guess[i] %in% remaining) {
+  for(i in seq_along(guess)) {
+    if(guess[i] != target[i] && guess[i] %in% remaining) {
       result[i] <- "in-word"
       remaining <- remaining[-match(guess[i], remaining)]
     }
