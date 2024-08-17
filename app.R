@@ -21,10 +21,33 @@ ui <- fluidPage(
     ),
     conditionalPanel(
       condition = "output.started",
-      h3("The target genus is drawn from these local organisms"),
-      textOutput('common'),
-      h3("And is equal to one of these genera"),
-      textOutput('genera'),
+      h3("What's my genus?"),
+      conditionalPanel(
+        condition = "!input.showimage",
+        actionButton('showimage', 'Show image')
+      ),
+      conditionalPanel(
+        condition = "input.showimage",
+        uiOutput("image")
+      ),
+      conditionalPanel(
+        condition = "!input.showcommon",
+        actionButton('showcommon', 'Show common names')
+      ),
+      conditionalPanel(
+        condition = "input.showcommon",
+        h4("One of these is my common name"),
+        textOutput('common')
+      ),
+      conditionalPanel(
+        condition = "!input.showgenera",
+        actionButton('showgenera', 'Show genus names')
+      ),
+      conditionalPanel(
+        condition = "input.showgenera",
+        h4("I'm one of these..."),
+        uiOutput('genera')
+      ),
       uiOutput("previous_guesses"),
       uiOutput("current_guess"),
       uiOutput("endgame"),
@@ -257,9 +280,8 @@ server <- function(input, output, session) {
     notInAny <- !wordsRightLength %in% c(placeRes$words_today, closeByHamm, closeByQ)
     farByQ <- sample(wordsRightLength[notInAny], min(50, sum(notInAny)), prob = qgram[notInAny]^4)
 
-    output$genera <- renderText(paste0(
-      'Genera of above, plus a random sample of global genera: ',
-      paste(tools::toTitleCase(sample(c(placeRes$words_today, closeByHamm, closeByQ, farByQ))),
+    output$genera <- renderUI(HTML(
+      paste('<i>', tools::toTitleCase(sample(c(placeRes$words_today, closeByHamm, closeByQ, farByQ))),  '</i>',
             collapse = ', ')
     ))
 
@@ -435,6 +457,10 @@ server <- function(input, output, session) {
     div(class = "endgame-content", lines)
   }
 
+  output$image <- renderUI({
+    htmlOutput('iurl')
+  })
+
   output$endgame <- renderUI({
     if (finished()) {
       renderEndgameUI(all_guesses())
@@ -444,8 +470,7 @@ server <- function(input, output, session) {
   output$endgame2 <- renderUI({
     if (finished()) {
       div(
-        endExplain(),
-        htmlOutput('iurl')
+        endExplain()
       )
     }
   })
