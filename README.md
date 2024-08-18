@@ -1,7 +1,5 @@
-# iNatle (Shiny Wordle derivative)
+# iNatle
 
-An implementation of the popular game [Wordle](https://www.powerlanguage.co.uk/wordle/), written in R using [Shiny](https://shiny.rstudio.com/).
-
-Version from which rmcminds forked: [deployed app](https://winston.shinyapps.io/wordle/)
+A game that lets you guess or ID the genus of organisms observed locally.
 
 Current iNatle: [code]() [deployed app](https://thecnidaegritty.org/iNatle)
