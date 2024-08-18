@@ -23,11 +23,15 @@ document.addEventListener('touchstart', function(e) {
   }
 });
 
-document.addEventListener('touchend', function() {
+document.addEventListener('touchend', function(e) {
   all_key_ids.forEach(id => {
     document.getElementById(id).style.pointerEvents = null;
   });
   if (in_button_touch) {
+      if (all_key_ids.includes(e.target.id)) {
+          // Disable text selection and triggering of click event.
+          e.preventDefault();
+      }
     in_button_touch = false;
   }
 });
