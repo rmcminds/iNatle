@@ -19,16 +19,18 @@ ui <- fluidPage(
       h3("Set up!"),
       HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
       textInput('Place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
-      textInput('Taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'")), value = 'Plantae', width = '100%'),
+      textInput('Taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'</p>")), value = 'Plantae', width = '100%'),
       actionButton('submit', 'Submit'),
+      HTML('<p style="margin-top: 15px">Please be patient after hitting submit</p>'),
       conditionalPanel(
         condition = "output.error",
-        HTML('<br>Not enough observations or species; try again')
+        HTML('<p>Not enough observations or species; try again</p>')
       )
     ),
     conditionalPanel(
       condition = "output.started",
       h3("What's my genus?"),
+      uiOutput("pretext"),
       conditionalPanel(
         condition = "!input.showimage",
         actionButton('showimage', 'Show image')
@@ -39,26 +41,16 @@ ui <- fluidPage(
       ),
       conditionalPanel(
         condition = "!input.showcommon",
-        actionButton('showcommon', 'Show common names')
+        actionButton('showcommon', 'Show common name')
       ),
       conditionalPanel(
         condition = "input.showcommon",
-        h4("One of these is my common name"),
+        h4("My common name is:"),
         textOutput('common')
-      ),
-      conditionalPanel(
-        condition = "!input.showgenera",
-        actionButton('showgenera', 'Show genus names')
-      ),
-      conditionalPanel(
-        condition = "input.showgenera",
-        h4("I'm one of these..."),
-        uiOutput('genera')
       ),
       uiOutput("previous_guesses"),
       uiOutput("current_guess"),
       uiOutput("endgame"),
-      uiOutput("endgame2"),
       uiOutput("new_game_ui"),
       uiOutput("keyboard")
     )
@@ -160,7 +152,6 @@ server <- function(input, output, session) {
   words[, 1] <- tolower(words[, 1])
 
   # Reactive Values Initialization
-  endExplain            <- reactiveVal(character(0))
   target_word           <- reactiveVal(character(0))
   all_guesses           <- reactiveVal(list())
   started               <- reactiveVal(FALSE)
@@ -234,7 +225,7 @@ server <- function(input, output, session) {
           month  = as.numeric(format(Sys.Date() - 1, "%m")),
           day    = as.numeric(format(Sys.Date() - 1, "%d"))
         )
-        assemble_game(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' yesterday: ')))
+        assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' yesterday!</p>')))
         started(TRUE)
         output$started <- reactive({started()})
 
@@ -246,7 +237,7 @@ server <- function(input, output, session) {
             month  = as.numeric(format(Sys.Date(), "%m")),
             day    = as.numeric(format(Sys.Date(), "%d"))
           )
-          assemble_game(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' on this date in all previous years: ')))
+          assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' on this date in previous years!</p>')))
           started(TRUE)
           output$started <- reactive({started()})
 
@@ -257,7 +248,7 @@ server <- function(input, output, session) {
               bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]),
               month = as.numeric(format(Sys.Date(), "%m"))
             )
-            assemble_game(c(try_date(obs), pretext = paste0('Organisms observed in ', placename, ' in this month in all previous years: ')))
+            assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' in this month in previous years!</p>')))
             started(TRUE)
             output$started <- reactive({started()})
 
@@ -266,7 +257,9 @@ server <- function(input, output, session) {
               obs <- get_inat_obs_nocurl(
                 taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
                 bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]))
-              assemble_game(c(try_date(obs), pretext = paste0('Organisms ever observed in ', placename, ': ')))
+              assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' at any time in the past!</p>')))
+              started(TRUE)
+              output$started <- reactive({started()})
             }, error = function(e4) {error(TRUE); reset_game()})
           })
         })
@@ -276,6 +269,11 @@ server <- function(input, output, session) {
   }
 
   assemble_game <- function(placeRes) {
+
+    output$pretext <- renderText({
+      placeRes$pretext
+    })
+
     newtarget <- sample(placeRes$words_today, 1, prob = 1 / (placeRes$weights + 0.1))
     refObs <- grep(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)
 
@@ -285,29 +283,10 @@ server <- function(input, output, session) {
       c('<a href="', placeRes$obs$url[refObs], '" target="_blank"><img src="', placeRes$obs$image_url[refObs], '"></a>')
     })
 
-    output$common <- renderText(paste0(placeRes$pretext, paste(placeRes$common, collapse = ', ')))
-
-    endExplain(paste0(tools::toTitleCase(newtarget), ' is the genus name of the ', placeRes$obs$common_name[refObs]))
-
-    wordsRightLength <- words[nchar(words[, 1]) == nchar(newtarget), 1]
-    hamm <- stringdist::stringdist(newtarget, wordsRightLength, method = 'hamming') + 0.01
-
-    notInToday <- !wordsRightLength %in% placeRes$words_today
-    closeByHamm <- sample(wordsRightLength[notInToday], min(25, sum(notInToday)), prob = 1 / hamm[notInToday]^4)
-
-    qgram <- stringdist::stringdist(newtarget, wordsRightLength, method = 'qgram', q = 1) + 0.01
-    notInEither <- !wordsRightLength %in% c(placeRes$words_today, closeByHamm)
-    closeByQ <- sample(wordsRightLength[notInEither], min(25, sum(notInEither)), prob = (hamm[notInEither] / qgram[notInEither])^4)
-
-    notInAny <- !wordsRightLength %in% c(placeRes$words_today, closeByHamm, closeByQ)
-    farByQ <- sample(wordsRightLength[notInAny], min(50, sum(notInAny)), prob = qgram[notInAny]^4)
-
-    output$genera <- renderUI(HTML(
-      paste('<i>', tools::toTitleCase(sample(c(placeRes$words_today, closeByHamm, closeByQ, farByQ))),  '</i>',
-            collapse = ', ')
-    ))
+    output$common <- renderText(paste0("'", placeRes$obs$common_name[refObs], "'"))
 
     target_word(newtarget)
+
   }
 
   reset_game <- function() {
@@ -334,7 +313,7 @@ server <- function(input, output, session) {
   # Rendering UI Elements
   output$previous_guesses <- renderUI({
     res <- lapply(all_guesses(), function(guess) {
-      letters <- guess$letters
+      letters <- c(guess$letters, rep(' ', length(guess$matches) - length(guess$letters)))
       row <- mapply(letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE, FUN = function(letter, match) {
         match_type <- match
         div(toupper(letter), class = paste("letter", match_type))
@@ -370,21 +349,16 @@ server <- function(input, output, session) {
     }
   })
 
-  observeEvent(input$new_game, {
-    started(FALSE)
-    output$started <- reactive({ started() })
-    reset_game()
-  })
-
   used_letters <- reactive({
     letter_matches <- list()
 
     lapply(all_guesses(), function(guess) {
-      mapply(guess$letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE,
-             FUN = function(letter, match) {
+      letters <- c(guess$letters, rep(' ', length(guess$matches) - length(guess$letters)))
+      mapply(letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE, FUN = function(letter, match) {
                prev_match <- letter_matches[[letter]]
-               if(is.null(prev_match) || (match == "correct" && prev_match != "correct") ||
-                   (match == "in-word" && prev_match == "not-in-word")) {
+               if(is.null(prev_match) ||
+                  (match == "correct" && prev_match != "correct") ||
+                  (match == "in-word" && prev_match == "not-in-word")) {
                  letter_matches[[letter]] <<- match
                }
              }
@@ -447,8 +421,6 @@ server <- function(input, output, session) {
   observeEvent(input$Enter, {
     guess <- paste(current_guess_letters(), collapse = "")
 
-    if(!guess %in% words[, 1]) return()
-
     all_guesses_new <- all_guesses()
     check_result <- check_word(guess, target_word())
     all_guesses_new[[length(all_guesses_new) + 1]] <- check_result
@@ -484,31 +456,22 @@ server <- function(input, output, session) {
     }
   })
 
-  output$endgame2 <- renderUI({
-    if(finished()) {
-      div(
-        endExplain()
-      )
-    }
-  })
 }
 
 check_word <- function(guess_str, target_str) {
   guess <- strsplit(guess_str, "")[[1]]
   target <- strsplit(target_str, "")[[1]]
 
-  if(length(guess) != length(target)) {
-    stop("Word lengths don't match.")
-  }
-
-  result <- rep("not-in-word", length(guess))
+  result <- rep("not-in-word", length(target))
   remaining <- character(0)
 
-  for(i in seq_along(guess)) {
-    if(guess[i] == target[i]) {
-      result[i] <- "correct"
-    } else {
-      remaining <- c(remaining, target[i])
+  for(i in seq_along(target)) {
+    if(i <= length(guess)) {
+      if(guess[i] == target[i]) {
+        result[i] <- "correct"
+      } else {
+        remaining <- c(remaining, target[i])
+      }
     }
   }
 

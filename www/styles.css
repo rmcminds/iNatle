@@ -6,8 +6,8 @@
     height: calc(100% - 30px);
     display: grid;
     grid-template-rows: 1fr auto;
-    overflow-y: auto;
     width: fit-content;
+    max-width: 100vh;
 }
 
 .shiny-input-text {
@@ -15,14 +15,14 @@
 }
 
 .guesses {
-    overflow-y: auto;
     height: 100%;
+    width: fit-content;
 }
-.guesses.finished {
-    overflow-y: auto;
-}
+
 .guesses .word {
     margin: 5px;
+    white-space: nowrap;
+    text-align: center;
 }
 .guesses .word > .letter {
     display: inline-block;
@@ -34,7 +34,6 @@
     line-height: 50px;
     font-size: 32px;
     font-weight: bold;
-    vertical-align: middle;
     user-select: none;
     color: white;
     font-family: 'Clear Sans', 'Helvetica Neue', Arial, sans-serif;
@@ -56,10 +55,10 @@
 .keyboard {
     height: 240px;
     user-select: none;
-    overflow-y: auto;
 }
 .keyboard .keyboard-row {
     margin: 3px;
+    white-space: nowrap;
 }
 .keyboard .keyboard-row .key {
     display: inline-block;
@@ -72,7 +71,6 @@
     line-height: 50px;
     font-size: 18px;
     font-weight: bold;
-    vertical-align: middle;
     color: black;
     font-family: 'Clear Sans', 'Helvetica Neue', Arial, sans-serif;
     background-color: #ddd;
