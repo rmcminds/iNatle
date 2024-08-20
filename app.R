@@ -20,8 +20,9 @@ ui <- fluidPage(
       HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
       textInput('Place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
       textInput('Taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'</p>")), value = 'Plantae', width = '100%'),
-      actionButton('submit', 'Submit'),
-      HTML('<p style="margin-top: 15px">Please be patient after hitting submit</p>'),
+      actionButton('submit', 'Random genus'),
+      actionButton('daily_stable', "Today's genus", inline = TRUE),
+      HTML('<p style="margin-top: 15px">Please be patient after clicking</p>'),
       conditionalPanel(
         condition = "output.error",
         HTML('<p>Not enough observations or species; try again</p>')
@@ -147,7 +148,7 @@ get_inat_obs_nocurl <- function(query = NULL, taxon_name = NULL, taxon_id = NULL
 }
 
 server <- function(input, output, session) {
-
+  
   words <- read.table('www/words.txt', sep='\t')
   words[, 1] <- tolower(words[, 1])
 
@@ -155,6 +156,8 @@ server <- function(input, output, session) {
   target_word           <- reactiveVal(character(0))
   all_guesses           <- reactiveVal(list())
   started               <- reactiveVal(FALSE)
+  myseed                <- reactiveVal(NULL)
+  submitted             <- reactiveVal(FALSE)
   error                 <- reactiveVal(FALSE)
   finished              <- reactiveVal(FALSE)
   current_guess_letters <- reactiveVal(character(0))
@@ -163,7 +166,10 @@ server <- function(input, output, session) {
 
   placelevels <- c('continent', 'region', 'country', 'settlement')
 
-  # Observing whether the game has started
+  # Observing whether the game has started (I think I have these reactives way more complicated than necessary...)
+  output$submitted <- reactive({submitted()})
+  outputOptions(output, "submitted", suspendWhenHidden = FALSE)
+
   output$started <- reactive({started()})
   outputOptions(output, "started", suspendWhenHidden = FALSE)
 
@@ -274,6 +280,8 @@ server <- function(input, output, session) {
       placeRes$pretext
     })
 
+    set.seed(myseed())
+
     newtarget <- sample(placeRes$words_today, 1, prob = 1 / (placeRes$weights + 0.1))
     refObs <- grep(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)
 
@@ -294,19 +302,33 @@ server <- function(input, output, session) {
     current_placelevel(1)
     finished(FALSE)
   }
+  
+  observeEvent(input$daily_stable, {
+    myseed(format(Sys.Date(), '%Y%m%d'))
+    submitted(TRUE)
+  })
+  
+  observeEvent(input$submit, {
+    submitted(TRUE)
+  })
 
   # Observing Events
-  observeEvent(input$submit, {
-    print("Submit button pressed")
-    print(paste("Place entered:", input$Place))
-    try_place(input$Place, current_placelevel(), words)
+  observeEvent(submitted(), {
+    if(submitted()) {
+      print("Submit button pressed")
+      print(paste("Place entered:", input$Place))
+      try_place(input$Place, current_placelevel(), words)
+    }
   })
 
   observeEvent(input$new_game, {
     started(FALSE)
     error(FALSE)
+    submitted(FALSE)
+    myseed(NULL)
     output$started <- reactive({started()})
     output$error <- reactive({error()})
+    output$submitted <- reactive({submitted()})
     reset_game()
   })
 
