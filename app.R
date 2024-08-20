@@ -4,7 +4,13 @@ library(bslib)
 library(jsonlite)
 
 ui <- fluidPage(
+  
   theme = bs_theme(version = 4),
+  tags$style(type='text/css', "#showimage { margin: 5px; }"),
+  tags$style(type='text/css', "#hideimage { margin: 5px; }"),
+  tags$style(type='text/css', "#showcommon { margin: 5px; }"),
+  tags$style(type='text/css', "#hidecommon { margin: 5px; }"),
+  
   title = "iNatle: Local Genera",
 
   # Link to external CSS file
@@ -14,47 +20,7 @@ ui <- fluidPage(
 
   div(
     class = "guesses",
-    conditionalPanel(
-      condition = "!output.started",
-      h3("Set up!"),
-      HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
-      textInput('Place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
-      textInput('Taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'</p>")), value = 'Plantae', width = '100%'),
-      actionButton('submit', 'Random genus'),
-      actionButton('daily_stable', "Today's genus", inline = TRUE),
-      HTML('<p style="margin-top: 15px">Please be patient after clicking</p>'),
-      conditionalPanel(
-        condition = "output.error",
-        HTML('<p>Not enough observations or species; try again</p>')
-      )
-    ),
-    conditionalPanel(
-      condition = "output.started",
-      h3("What's my genus?"),
-      uiOutput("pretext"),
-      conditionalPanel(
-        condition = "!input.showimage",
-        actionButton('showimage', 'Show image')
-      ),
-      conditionalPanel(
-        condition = "input.showimage",
-        uiOutput("image")
-      ),
-      conditionalPanel(
-        condition = "!input.showcommon",
-        actionButton('showcommon', 'Show common name')
-      ),
-      conditionalPanel(
-        condition = "input.showcommon",
-        h4("My common name is:"),
-        textOutput('common')
-      ),
-      uiOutput("previous_guesses"),
-      uiOutput("current_guess"),
-      uiOutput("endgame"),
-      uiOutput("new_game_ui"),
-      uiOutput("keyboard")
-    )
+    uiOutput('allout')
   ),
 
   # Link to external JS file
@@ -149,32 +115,24 @@ get_inat_obs_nocurl <- function(query = NULL, taxon_name = NULL, taxon_id = NULL
 
 server <- function(input, output, session) {
   
+  # Reactive Values Initialization
+  r <- reactiveValues(submitted    = FALSE,
+                      loadtext     = '',
+                      started      = FALSE,
+                      current_seed = NULL,
+                      target_word  = character(0),
+                      all_guesses  = list(),
+                      error        = '',
+                      finished     = FALSE,
+                      showimage    = FALSE,
+                      showcommon   = FALSE,
+                      current_guess_letters = character(0),
+                      current_placelevel    = 1)
+
   words <- read.table('www/words.txt', sep='\t')
   words[, 1] <- tolower(words[, 1])
 
-  # Reactive Values Initialization
-  target_word           <- reactiveVal(character(0))
-  all_guesses           <- reactiveVal(list())
-  started               <- reactiveVal(FALSE)
-  myseed                <- reactiveVal(NULL)
-  submitted             <- reactiveVal(FALSE)
-  error                 <- reactiveVal(FALSE)
-  finished              <- reactiveVal(FALSE)
-  current_guess_letters <- reactiveVal(character(0))
-  current_placelevel    <- reactiveVal(1)
-  setplace              <- reactiveVal(matrix(0, nrow = 2, ncol = 2))
-
   placelevels <- c('continent', 'region', 'country', 'settlement')
-
-  # Observing whether the game has started (I think I have these reactives way more complicated than necessary...)
-  output$submitted <- reactive({submitted()})
-  outputOptions(output, "submitted", suspendWhenHidden = FALSE)
-
-  output$started <- reactive({started()})
-  outputOptions(output, "started", suspendWhenHidden = FALSE)
-
-  output$error <- reactive({error()})
-  outputOptions(output, "error", suspendWhenHidden = FALSE)
 
   # Function Definitions
   common_names <- function(words_today, obs) {
@@ -218,8 +176,8 @@ server <- function(input, output, session) {
 
     if(any(is.na(placeBB))) {
 
-      current_placelevel(placelevels[[current_placelevel() + 1]])
-      try_place(input$Place, current_placelevel(), words)
+      r$current_placelevel <- placelevels[[r$current_placelevel + 1]]
+      try_place(input$Place, r$current_placelevel, words)
 
     } else {
 
@@ -232,9 +190,6 @@ server <- function(input, output, session) {
           day    = as.numeric(format(Sys.Date() - 1, "%d"))
         )
         assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' yesterday!</p>')))
-        started(TRUE)
-        output$started <- reactive({started()})
-
       }, error = function(e1) {
         tryCatch({
           obs <- get_inat_obs_nocurl(
@@ -244,9 +199,6 @@ server <- function(input, output, session) {
             day    = as.numeric(format(Sys.Date(), "%d"))
           )
           assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' on this date in previous years!</p>')))
-          started(TRUE)
-          output$started <- reactive({started()})
-
         }, error = function(e2) {
           tryCatch({
             obs <- get_inat_obs_nocurl(
@@ -255,18 +207,13 @@ server <- function(input, output, session) {
               month = as.numeric(format(Sys.Date(), "%m"))
             )
             assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' in this month in previous years!</p>')))
-            started(TRUE)
-            output$started <- reactive({started()})
-
           }, error = function(e3) {
             tryCatch({
               obs <- get_inat_obs_nocurl(
                 taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
                 bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]))
               assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' at any time in the past!</p>')))
-              started(TRUE)
-              output$started <- reactive({started()})
-            }, error = function(e4) {error(TRUE); reset_game()})
+            }, error = function(e4) {r$error <- 'Not enough observations or species; try again'; reset_game()})
           })
         })
       })
@@ -280,7 +227,7 @@ server <- function(input, output, session) {
       placeRes$pretext
     })
 
-    set.seed(myseed())
+    set.seed(r$current_seed)
 
     newtarget <- sample(placeRes$words_today, 1, prob = 1 / (placeRes$weights + 0.1))
     refObs <- grep(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)
@@ -293,48 +240,123 @@ server <- function(input, output, session) {
 
     output$common <- renderText(paste0("'", placeRes$obs$common_name[refObs], "'"))
 
-    target_word(newtarget)
+    r$target_word <- newtarget
 
-  }
+    r$started <- TRUE
 
-  reset_game <- function() {
-    all_guesses(list())
-    current_placelevel(1)
-    finished(FALSE)
   }
   
+  reset_game <- function() {
+    r$submitted <- FALSE
+    r$current_seed <- NULL
+    r$showimage <- FALSE
+    r$showcommon <- FALSE
+    r$all_guesses <- list()
+    r$current_placelevel <- 1
+    r$finished <- FALSE
+    r$started <- FALSE
+  }
+  
+  output$allout <- renderUI({
+    if(!r$started) {
+      tagList(
+        h3("Set up!"),
+        HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
+        textInput('Place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
+        textInput('Taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'</p>")), value = 'Plantae', width = '100%'),
+        actionButton('submit', 'Random genus'),
+        actionButton('daily_stable', "Today's genus", inline = TRUE),
+        uiOutput('loadtext_ui'),
+        uiOutput('error_ui')
+      )
+    } else {
+      tagList(
+        h3("What's my genus?"),
+        uiOutput("pretext"),
+        uiOutput("image_div"),
+        uiOutput("common_div"),
+        uiOutput("previous_guesses"),
+        uiOutput("current_guess"),
+        uiOutput("endgame"),
+        uiOutput("new_game_ui"),
+        uiOutput("keyboard")
+      )
+    }
+  })
+  
   observeEvent(input$daily_stable, {
-    myseed(format(Sys.Date(), '%Y%m%d'))
-    submitted(TRUE)
+    r$loadtext <- "Loading today's genus..."
+    r$current_seed <- format(Sys.Date(), '%Y%m%d')
+    r$submitted <- TRUE
   })
   
   observeEvent(input$submit, {
-    submitted(TRUE)
+    r$loadtext <- 'Loading random genus...'
+    r$submitted <- TRUE
   })
 
   # Observing Events
-  observeEvent(submitted(), {
-    if(submitted()) {
-      print("Submit button pressed")
-      print(paste("Place entered:", input$Place))
-      try_place(input$Place, current_placelevel(), words)
+  output$loadtext_ui <- renderUI({
+    p(r$loadtext)
+  })
+  
+   output$error_ui <- renderUI({
+    p(r$error)
+  })
+  
+  observeEvent(r$submitted, {
+    if(r$submitted) {
+      try_place(input$Place, r$current_placelevel, words)
+    }
+  })
+  
+  observeEvent(input$showimage, {
+    r$showimage <- TRUE
+  })
+  
+  observeEvent(input$hideimage, {
+    r$showimage <- FALSE
+  })
+  
+  output$image_div <- renderUI({
+    if(r$showimage) {
+      list(
+        htmlOutput('iurl'),
+        actionButton('hideimage', 'Hide image')
+      )
+    } else {
+      actionButton('showimage', 'Show image')
+    }
+  })
+  
+  observeEvent(input$showcommon, {
+    r$showcommon <- TRUE
+  })
+  
+  observeEvent(input$hidecommon, {
+    r$showcommon <- FALSE
+  })
+  
+  output$common_div <- renderUI({
+    if(r$showcommon) {
+      list(
+        h4("My common name is:"),
+        textOutput('common'),
+        actionButton('hidecommon', 'Hide common name')
+      )
+    } else {
+      actionButton('showcommon', 'Show common name')
     }
   })
 
   observeEvent(input$new_game, {
-    started(FALSE)
-    error(FALSE)
-    submitted(FALSE)
-    myseed(NULL)
-    output$started <- reactive({started()})
-    output$error <- reactive({error()})
-    output$submitted <- reactive({submitted()})
+    r$error <- ''
     reset_game()
   })
 
   # Rendering UI Elements
   output$previous_guesses <- renderUI({
-    res <- lapply(all_guesses(), function(guess) {
+    res <- lapply(r$all_guesses, function(guess) {
       letters <- c(guess$letters, rep(' ', length(guess$matches) - length(guess$letters)))
       row <- mapply(letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE, FUN = function(letter, match) {
         match_type <- match
@@ -348,10 +370,10 @@ server <- function(input, output, session) {
   })
 
   output$current_guess <- renderUI({
-    if(!started() || finished()) return()
+    if(!r$started || r$finished) return()
 
-    letters <- current_guess_letters()
-    target_length <- isolate(nchar(target_word()))
+    letters <- r$current_guess_letters
+    target_length <- isolate(nchar(r$target_word))
 
     if(length(letters) < target_length) {
       letters[(length(letters) + 1):target_length] <- ""
@@ -366,7 +388,7 @@ server <- function(input, output, session) {
   })
 
   output$new_game_ui <- renderUI({
-    if(finished()) {
+    if(r$finished) {
       actionButton("new_game", "New Game")
     }
   })
@@ -374,7 +396,7 @@ server <- function(input, output, session) {
   used_letters <- reactive({
     letter_matches <- list()
 
-    lapply(all_guesses(), function(guess) {
+    lapply(r$all_guesses, function(guess) {
       letters <- c(guess$letters, rep(' ', length(guess$matches) - length(guess$letters)))
       mapply(letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE, FUN = function(letter, match) {
                prev_match <- letter_matches[[letter]]
@@ -420,10 +442,10 @@ server <- function(input, output, session) {
 
   observeKeyPress <- function(key) {
     observeEvent(input[[key]], {
-      if(!started() || finished()) return()
-      cur <- current_guess_letters()
-      if(length(cur) < isolate(nchar(target_word()))) {
-        current_guess_letters(c(cur, tolower(key)))
+      if(!r$started || r$finished) return()
+      cur <- r$current_guess_letters
+      if(length(cur) < isolate(nchar(r$target_word))) {
+        r$current_guess_letters <- c(cur, tolower(key))
       }
     })
   }
@@ -435,22 +457,22 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$Back, {
-    if(length(current_guess_letters()) > 0) {
-      current_guess_letters(current_guess_letters()[-length(current_guess_letters())])
+    if(length(r$current_guess_letters) > 0) {
+      r$current_guess_letters <- r$current_guess_letters[-length(r$current_guess_letters)]
     }
   })
 
   observeEvent(input$Enter, {
-    guess <- paste(current_guess_letters(), collapse = "")
+    guess <- paste(r$current_guess_letters, collapse = "")
 
-    all_guesses_new <- all_guesses()
-    check_result <- check_word(guess, target_word())
+    all_guesses_new <- r$all_guesses
+    check_result <- check_word(guess, r$target_word)
     all_guesses_new[[length(all_guesses_new) + 1]] <- check_result
-    all_guesses(all_guesses_new)
+    r$all_guesses <- all_guesses_new
 
-    if(isTRUE(check_result$win)) finished(TRUE)
+    if(isTRUE(check_result$win)) r$finished <- TRUE
 
-    current_guess_letters(character(0))
+    r$current_guess_letters <- character(0)
   })
 
   renderEndgameUI <- function(guesses) {
@@ -468,13 +490,9 @@ server <- function(input, output, session) {
     div(class = "endgame-content", lines)
   }
 
-  output$image <- renderUI({
-    htmlOutput('iurl')
-  })
-
   output$endgame <- renderUI({
-    if(finished()) {
-      renderEndgameUI(all_guesses())
+    if(r$finished) {
+      renderEndgameUI(r$all_guesses)
     }
   })
 
