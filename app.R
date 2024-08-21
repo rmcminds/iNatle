@@ -210,15 +210,15 @@ server <- function(input, output, session) {
     json_response <- paste(response, collapse = "")
     obj <- fromJSON(json_response, simplifyVector=FALSE)[[1]]
 
-    place_display_name <- paste(obj$display_name, ' (', obj$addresstype, ')')
+    place_display_name <- paste0(obj$display_name, ' (', obj$addresstype, ')')
     bn <- as.numeric(obj$boundingbox)
     placeBB <- matrix(c(bn[3:4], bn[1:2]), nrow = 2, byrow = TRUE)
     dimnames(placeBB) <- list(c("x", "y"), c("min", "max"))
 
     if(any(is.na(placeBB))) {
 
-      r$current_placelevel <- placelevels[[r$current_placelevel + 1]]
-      try_place(input$place, r$current_placelevel)
+      r$current_placelevel <- r$current_placelevel + 1
+      try_place(input$place, placelevels[[r$current_placelevel]])
 
     } else {
 
@@ -232,7 +232,7 @@ server <- function(input, output, session) {
           day        = as.numeric(format(Sys.Date() - 1, "%d")),
           created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
           locale     = r$locale,
-          pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', place_display_name, ' yesterday!</p>')
+          pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed yesterday in ', place_display_name, '!</p>')
         )
       }, error = function(e1) {
         tryCatch({
@@ -244,7 +244,7 @@ server <- function(input, output, session) {
             day        = as.numeric(format(Sys.Date(), "%d")),
             created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
             locale     = r$locale,
-            pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', place_display_name, ' on this date in previous years!</p>')
+            pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed on this date in previous years in ', place_display_name, '!</p>')
           )
         }, error = function(e2) {
           tryCatch({
@@ -255,7 +255,7 @@ server <- function(input, output, session) {
               month      = as.numeric(format(Sys.Date(), "%m")),
               created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
               locale     = r$locale,
-              pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', place_display_name, ' in this month in previous years!</p>')
+              pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in this month in previous years in ', place_display_name, '!</p>')
             )
           }, error = function(e3) {
             tryCatch({
@@ -265,7 +265,7 @@ server <- function(input, output, session) {
                 bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
                 created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
                 locale     = r$locale,
-                pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', place_display_name, ' at any time in the past!</p>')
+                pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed at any time in the past in ', place_display_name, '!</p>')
               )
             }, error = function(e4) {
               r$error <- 'Not enough observations or species; try again'
@@ -311,7 +311,7 @@ server <- function(input, output, session) {
     })
 
     if('preferred_common_name' %in% names(r$tax_info)) {
-      intro <- "My common name in your preferred language is '"
+      intro <- paste0("My common name in ", names(locales_list)[locales_list == locale], " is '")
       if(grepl(r$target_word, r$tax_info$preferred_common_name)) {
         common_genus <- str_replace_all(r$tax_info$preferred_common_name, 
                                         r$target_word, 
@@ -322,7 +322,7 @@ server <- function(input, output, session) {
         outro <- "'"
       }
     } else if('english_common_name' %in% names(r$tax_info)) {
-      intro <- "My common name isn't available on iNaturalist for your preferred language.<br>In English, it's '"
+      intro <- paste0("My common name isn't available on iNaturalist in ", names(locales_list)[locales_list == locale], ".<br>In English, it's '")
       if(grepl(r$target_word, r$tax_info$english_common_name)) {
         common_genus <- str_replace_all(r$tax_info$english_common_name, 
                                         r$target_word, 
@@ -364,7 +364,7 @@ server <- function(input, output, session) {
         HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
         textInput('place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
         textInput('taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'</p>")), value = 'Plantae', width = '100%'),
-        textInput('userid', div(h3('Enter a user id'), HTML("<p>or leave it blank</p>")), value = '', width = '100%'),
+        textInput('user_login', div(h3('Enter a user login name'), HTML("<p>or leave it blank</p>")), value = '', width = '100%'),
         selectInput("locale", h3('Enter the language of your common name hint'), names(locales_list), 'English', width = '100%'),
         actionButton('submit', 'Random genus'),
         actionButton('daily_stable', "Today's genus", inline = TRUE),
@@ -410,7 +410,7 @@ server <- function(input, output, session) {
     if(r$submitted) {
       r$locale <- locales_list[[input$locale]]
       r$error <- ""
-      try_place(input$place, r$current_placelevel)
+      try_place(input$place, placelevels[[r$current_placelevel]])
     }
   })
   
