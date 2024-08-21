@@ -5,10 +5,12 @@ library(jsonlite)
 library(i18n)
 library(stringr)
 
+# Create list of language options
 simplei18n <- grep('-', all_locales, invert = TRUE)
 simplei18n <- sapply(simplei18n, \(x) locale_names[x,2][[1]][all_locales[[x]]])
 locales_list <- setNames(names(simplei18n), simplei18n)
 
+# Create UI. Mostly a frame that is filled in by the server.
 ui <- fluidPage(
   
   theme = bs_theme(version = 4),
@@ -33,7 +35,7 @@ ui <- fluidPage(
   includeScript("www/custom.js")
 )
 
-# get an iNat tax ID from an arbitrary string or genus
+# Get iNat tax info from an arbitrary string, genus, or ID number
 get_tax <- function(taxon_name = NULL, genus = FALSE, taxon_id = NULL, locale = NULL) {
   
   params <- list()
@@ -42,9 +44,10 @@ get_tax <- function(taxon_name = NULL, genus = FALSE, taxon_id = NULL, locale = 
   if(!is.null(taxon_id)) params$taxon_id <- taxon_id
   if(!is.null(locale)) params$locale <- locale
   
-  query <- paste0(paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&"), "&order=desc&order_by=observations_count&per_page=1")
+  query <- paste0(paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&"), 
+                  "&order=desc&order_by=observations_count&per_page=1")
+  
   full_url <- paste0("https://api.inaturalist.org/v1/taxa?", query)
-
   response <- readLines(url(full_url), warn = FALSE)
   json_response <- paste(response, collapse = "")
   obj <- fromJSON(json_response, simplifyVector = FALSE)
@@ -55,7 +58,7 @@ get_tax <- function(taxon_name = NULL, genus = FALSE, taxon_id = NULL, locale = 
   
 }
 
-# get species counts
+# Get species counts
 get_sc <- function(taxon_id   = NULL, 
                    year       = NULL, 
                    month      = NULL, 
@@ -111,6 +114,7 @@ get_sc <- function(taxon_id   = NULL,
   
 }
 
+# Choose the word of the day
 choose_taxon <- function(obj, seed) {
   
   set.seed(seed)
@@ -127,6 +131,7 @@ choose_taxon <- function(obj, seed) {
   
 }
 
+# Choose a specific observation to represent the word of the day
 get_observation <- function(taxon_id   = NULL, 
                             year       = NULL, 
                             month      = NULL, 
@@ -182,6 +187,7 @@ get_observation <- function(taxon_id   = NULL,
   
 }
 
+# Do all the real work
 server <- function(input, output, session) {
   
   # Reactive Values Initialization
@@ -236,7 +242,7 @@ server <- function(input, output, session) {
           day        = format(Sys.Date() - 1, "%d"),
           created_d2 = created_d2,
           locale     = r$locale,
-          pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed yesterday in ', place_display_name, '!</p>')
+          pretext    = paste0('I was observed yesterday in ', place_display_name, '!')
         )
       }, error = function(e1) {
         tryCatch({
@@ -248,7 +254,7 @@ server <- function(input, output, session) {
             day        = format(Sys.Date(), "%d"),
             created_d2 = created_d2,
             locale     = r$locale,
-            pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed on this date in previous years in ', place_display_name, '!</p>')
+            pretext    = paste0('I was observed on this date in previous years in ', place_display_name, '!')
           )
         }, error = function(e2) {
           tryCatch({
@@ -259,7 +265,7 @@ server <- function(input, output, session) {
               month      = format(Sys.Date(), "%m"),
               created_d2 = created_d2,
               locale     = r$locale,
-              pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in this month in previous years in ', place_display_name, '!</p>')
+              pretext    = paste0('I was observed in this month in previous years in ', place_display_name, '!')
             )
           }, error = function(e3) {
             tryCatch({
@@ -269,7 +275,7 @@ server <- function(input, output, session) {
                 bounds     = bounds,
                 created_d2 = created_d2,
                 locale     = r$locale,
-                pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed at any time in the past in ', place_display_name, '!</p>')
+                pretext    = paste0('I was observed at some time in the past in ', place_display_name, '!')
               )
             }, error = function(e4) {
               r$error <- 'Not enough observations or species; try again'
@@ -284,8 +290,10 @@ server <- function(input, output, session) {
 
   assemble_game <- function(taxon_name, user_login, bounds, year, month, day, created_d2, locale, pretext) {
     
+    # iNaturalist ID number for a taxon specified by the user
     group_taxon_id <- get_tax(taxon_name)$id
     
+    # Observation counts fitting search criteria
     sc <- get_sc(
       taxon_id   = group_taxon_id,
       user_login = user_login,
@@ -297,8 +305,13 @@ server <- function(input, output, session) {
       locale     = locale
     )
 
+    # Today's target genus
     r$target_word <- tolower(choose_taxon(sc, r$current_seed))
+    
+    # Taxonomy infor for today's target genus
     r$tax_info <- get_tax(r$target_word, TRUE, locale = locale)
+    
+    # Today's observation
     r$ref_obs <- get_observation(taxon_id   = r$tax_info$id,
                                  user_login = user_login,
                                  bounds     = bounds,
@@ -308,14 +321,18 @@ server <- function(input, output, session) {
                                  created_d2 = created_d2,
                                  locale     = locale)
 
+    # Taxonomy info for today's observation
     obstax <- get_tax(taxon_id = r$ref_obs$results[[1]]$taxon$id, locale = locale)
     
-    output$pretext <- renderText({pretext})
+    # Explanation of today's observation
+    output$pretext <- renderText({ paste0('<p style="margin-bottom: 10px">', pretext, '</p>') })
 
+    # HTML for image and link
     output$iurl <- renderText({
       c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url), '/medium.jpeg'), '"></a>')
     })
 
+    # Contsruct common genus name hint
     if('preferred_common_name' %in% names(r$tax_info)) {
       
       intro_genus <- paste0("The common name for my genus in <b>", names(locales_list)[locales_list == locale], "</b> is '")
@@ -355,6 +372,7 @@ server <- function(input, output, session) {
       
     }
     
+    # Construct specific common name hint
     if('preferred_common_name' %in% names(obstax)) {
       
       intro_specific <- paste0("My specific common name in <b>", names(locales_list)[locales_list == locale], "</b> is '")
@@ -394,8 +412,10 @@ server <- function(input, output, session) {
       
     }
     
+    # Construct full HTML for common name hint
     output$common <- renderText(paste0(intro_genus, common_genus, outro_genus, '<br>', intro_specific, common_specific, outro_specific))
 
+    # Begin the game!
     r$started <- TRUE
 
   }
