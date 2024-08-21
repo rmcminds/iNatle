@@ -3,6 +3,7 @@ library(htmltools)
 library(bslib)
 library(jsonlite)
 library(i18n)
+library(stringr)
 
 simplei18n <- grep('-', all_locales, invert = TRUE)
 simplei18n <- sapply(simplei18n, \(x) locale_names[x,2][[1]][all_locales[[x]]])
@@ -57,7 +58,7 @@ get_sc <- function(taxon_id   = NULL,
                    month      = NULL, 
                    day        = NULL, 
                    bounds     = NULL, 
-                   user_id    = NULL, 
+                   user_login = NULL, 
                    locale     = NULL,
                    created_d2 = NULL,
                    maxresults = 200) {
@@ -93,7 +94,7 @@ get_sc <- function(taxon_id   = NULL,
       params$nelat <- bounds[3]
       params$nelng <- bounds[4]
     }
-    if(!is.null(user_id)) params$user_id <- user_id
+    if(!is.null(user_login)) params$user_login <- user_login
 
     # Create URL with query parameters
     query <- paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&")
@@ -128,7 +129,7 @@ get_observation <- function(taxon_id   = NULL,
                             month      = NULL, 
                             day        = NULL, 
                             bounds     = NULL, 
-                            user_id    = NULL, 
+                            user_login = NULL, 
                             locale     = NULL,
                             created_d2 = NULL) {
   
@@ -164,7 +165,7 @@ get_observation <- function(taxon_id   = NULL,
       params$nelat <- bounds[3]
       params$nelng <- bounds[4]
     }
-    if(!is.null(user_id)) params$user_id <- user_id
+    if(!is.null(user_login)) params$user_login <- user_login
 
     # Create URL with query parameters
     query <- paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&")
@@ -207,63 +208,64 @@ server <- function(input, output, session) {
 
     response <- readLines(url(full_url), warn = FALSE)
     json_response <- paste(response, collapse = "")
-    obj <- fromJSON(json_response, simplifyVector=FALSE)
+    obj <- fromJSON(json_response, simplifyVector=FALSE)[[1]]
 
-    bn <- as.numeric(obj[[1]]$boundingbox)
+    place_display_name <- paste(obj$display_name, ' (', obj$addresstype, ')')
+    bn <- as.numeric(obj$boundingbox)
     placeBB <- matrix(c(bn[3:4], bn[1:2]), nrow = 2, byrow = TRUE)
     dimnames(placeBB) <- list(c("x", "y"), c("min", "max"))
 
     if(any(is.na(placeBB))) {
 
       r$current_placelevel <- placelevels[[r$current_placelevel + 1]]
-      try_place(input$Place, r$current_placelevel)
+      try_place(input$place, r$current_placelevel)
 
     } else {
 
       tryCatch({
         assemble_game(
-          taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
-          user_id    = if(input$userid == '') NULL else input$userid,
+          taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
+          user_login = if(input$user_login == '') NULL else input$user_login,
           bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
           year       = as.numeric(format(Sys.Date() - 1, "%Y")),
           month      = as.numeric(format(Sys.Date() - 1, "%m")),
           day        = as.numeric(format(Sys.Date() - 1, "%d")),
           created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
           locale     = r$locale,
-          pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' yesterday!</p>')
+          pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', place_display_name, ' yesterday!</p>')
         )
       }, error = function(e1) {
         tryCatch({
           assemble_game(
-            taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
-            user_id    = if(input$userid == '') NULL else input$userid,
+            taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
+            user_login = if(input$user_login == '') NULL else input$user_login,
             bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
             month      = as.numeric(format(Sys.Date(), "%m")),
             day        = as.numeric(format(Sys.Date(), "%d")),
             created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
             locale     = r$locale,
-            pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' on this date in previous years!</p>')
+            pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', place_display_name, ' on this date in previous years!</p>')
           )
         }, error = function(e2) {
           tryCatch({
             assemble_game(
-              taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
-              user_id    = if(input$userid == '') NULL else input$userid,
+              taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
+              user_login = if(input$user_login == '') NULL else input$user_login,
               bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
               month      = as.numeric(format(Sys.Date(), "%m")),
               created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
               locale     = r$locale,
-              pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' in this month in previous years!</p>')
+              pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', place_display_name, ' in this month in previous years!</p>')
             )
           }, error = function(e3) {
             tryCatch({
               assemble_game(
-                taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
-                user_id    = if(input$userid == '') NULL else input$userid,
+                taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
+                user_login = if(input$user_login == '') NULL else input$user_login,
                 bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
                 created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
                 locale     = r$locale,
-                pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' at any time in the past!</p>')
+                pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', place_display_name, ' at any time in the past!</p>')
               )
             }, error = function(e4) {
               r$error <- 'Not enough observations or species; try again'
@@ -276,13 +278,13 @@ server <- function(input, output, session) {
     }
   }
 
-  assemble_game <- function(taxon_name, user_id, bounds, year, month, day, created_d2, locale, pretext) {
+  assemble_game <- function(taxon_name, user_login, bounds, year, month, day, created_d2, locale, pretext) {
     
     group_taxon_id <- get_tax(taxon_name)$id
     
     sc <- get_sc(
       taxon_id   = group_taxon_id,
-      user_id    = user_id,
+      user_login = user_login,
       bounds     = bounds,
       year       = year,
       month      = month,
@@ -290,12 +292,11 @@ server <- function(input, output, session) {
       created_d2 = created_d2,
       locale     = locale
     )
-    ## need to do checks and throw error here?
 
     r$target_word <- tolower(choose_taxon(sc, r$current_seed))
     r$tax_info <- get_tax(r$target_word, TRUE, locale)
     r$ref_obs <- get_observation(taxon_id   = r$tax_info$id,
-                                 user_id    = user_id,
+                                 user_login = user_login,
                                  bounds     = bounds,
                                  year       = year,
                                  month      = month,
@@ -306,16 +307,40 @@ server <- function(input, output, session) {
     output$pretext <- renderText({pretext})
 
     output$iurl <- renderText({
-      c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url),'/medium.jpeg'), '"></a>')
+      c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url), '/medium.jpeg'), '"></a>')
     })
 
     if('preferred_common_name' %in% names(r$tax_info)) {
-      output$common <- renderText(paste0("My common name in your preferred language is '", r$tax_info$preferred_common_name, "'"))
+      intro <- "My common name in your preferred language is '"
+      if(grepl(r$target_word, r$tax_info$preferred_common_name)) {
+        common_genus <- str_replace_all(r$tax_info$preferred_common_name, 
+                                        r$target_word, 
+                                        paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
+        outro <- "'<br>(The target genus has been hidden)"
+      } else {
+        common_genus <- r$tax_info$preferred_common_name
+        outro <- "'"
+      }
     } else if('english_common_name' %in% names(r$tax_info)) {
-      output$common <- renderText(paste0("My common name isn't available on iNaturalist for your preferred language.<br>In English, it's '", r$tax_info$english_common_name, "'<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", r$tax_info$id,"\" target=\"_blank\">add</a> missing names to iNaturalist?"))
+      intro <- "My common name isn't available on iNaturalist for your preferred language.<br>In English, it's '"
+      if(grepl(r$target_word, r$tax_info$english_common_name)) {
+        common_genus <- str_replace_all(r$tax_info$english_common_name, 
+                                        r$target_word, 
+                                        paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
+        outro <- paste0("'<br>(The target genus has been hidden)<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
+                        r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+      } else {
+        common_genus <- r$tax_info$english_common_name
+        outro <- paste0("'<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
+                        r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+      }
     } else {
-      output$common <- renderText(paste0("I don't seem to have a common name!<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", r$tax_info$id,"\" target=\"_blank\">add</a> missing names to iNaturalist?"))
+      intro <- paste0("I don't seem to have a common name!<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", 
+                      r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+      common_genus <- ''
+      outro <- ''
     }
+    output$common <- renderText(paste0(intro, common_genus, outro))
 
     r$started <- TRUE
 
@@ -337,8 +362,8 @@ server <- function(input, output, session) {
       tagList(
         h3("Set up!"),
         HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
-        textInput('Place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
-        textInput('Taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'</p>")), value = 'Plantae', width = '100%'),
+        textInput('place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
+        textInput('taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'</p>")), value = 'Plantae', width = '100%'),
         textInput('userid', div(h3('Enter a user id'), HTML("<p>or leave it blank</p>")), value = '', width = '100%'),
         selectInput("locale", h3('Enter the language of your common name hint'), names(locales_list), 'English', width = '100%'),
         actionButton('submit', 'Random genus'),
@@ -385,7 +410,7 @@ server <- function(input, output, session) {
     if(r$submitted) {
       r$locale <- locales_list[[input$locale]]
       r$error <- ""
-      try_place(input$Place, r$current_placelevel)
+      try_place(input$place, r$current_placelevel)
     }
   })
   
