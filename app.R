@@ -34,14 +34,17 @@ ui <- fluidPage(
 )
 
 # get an iNat tax ID from an arbitrary string or genus
-get_tax <- function(taxon_name, genus = FALSE, locale = NULL) {
+get_tax <- function(taxon_name = NULL, genus = FALSE, taxon_id = NULL, locale = NULL) {
   
-  full_url <- paste0("https://api.inaturalist.org/v1/taxa?q=", 
-                     taxon_name, 
-                     if(!genus) NULL else "&rank=genus", 
-                     if(is.null(locale)) NULL else paste0('&locale=', locale),
-                     "&order=desc&order_by=observations_count&per_page=1")
+  params <- list()
+  if(!is.null(taxon_name)) params$q <- taxon_name
+  if(genus) params$rank <- "genus"
+  if(!is.null(taxon_id)) params$taxon_id <- taxon_id
+  if(!is.null(locale)) params$locale <- locale
   
+  query <- paste0(paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&"), "&order=desc&order_by=observations_count&per_page=1")
+  full_url <- paste0("https://api.inaturalist.org/v1/taxa?", query)
+
   response <- readLines(url(full_url), warn = FALSE)
   json_response <- paste(response, collapse = "")
   obj <- fromJSON(json_response, simplifyVector = FALSE)
@@ -210,12 +213,13 @@ server <- function(input, output, session) {
     json_response <- paste(response, collapse = "")
     obj <- fromJSON(json_response, simplifyVector=FALSE)[[1]]
 
-    place_display_name <- paste0(obj$display_name, ' (', obj$addresstype, ')')
-    bn <- as.numeric(obj$boundingbox)
-    placeBB <- matrix(c(bn[3:4], bn[1:2]), nrow = 2, byrow = TRUE)
-    dimnames(placeBB) <- list(c("x", "y"), c("min", "max"))
+    place_display_name <- obj$display_name
+    bounds <- as.numeric(obj$boundingbox)[c(1,3,2,4)]
+    
+    # This should help stabilize the queries throughout the day
+    created_d2 <- format(Sys.Date() - 1, "%Y-%m-%d")
 
-    if(any(is.na(placeBB))) {
+    if(any(is.na(bounds))) {
 
       r$current_placelevel <- r$current_placelevel + 1
       try_place(input$place, placelevels[[r$current_placelevel]])
@@ -226,11 +230,11 @@ server <- function(input, output, session) {
         assemble_game(
           taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
           user_login = if(input$user_login == '') NULL else input$user_login,
-          bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
-          year       = as.numeric(format(Sys.Date() - 1, "%Y")),
-          month      = as.numeric(format(Sys.Date() - 1, "%m")),
-          day        = as.numeric(format(Sys.Date() - 1, "%d")),
-          created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
+          bounds     = bounds,
+          year       = format(Sys.Date() - 1, "%Y"),
+          month      = format(Sys.Date() - 1, "%m"),
+          day        = format(Sys.Date() - 1, "%d"),
+          created_d2 = created_d2,
           locale     = r$locale,
           pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed yesterday in ', place_display_name, '!</p>')
         )
@@ -239,10 +243,10 @@ server <- function(input, output, session) {
           assemble_game(
             taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
             user_login = if(input$user_login == '') NULL else input$user_login,
-            bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
-            month      = as.numeric(format(Sys.Date(), "%m")),
-            day        = as.numeric(format(Sys.Date(), "%d")),
-            created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
+            bounds     = bounds,
+            month      = format(Sys.Date(), "%m"),
+            day        = format(Sys.Date(), "%d"),
+            created_d2 = created_d2,
             locale     = r$locale,
             pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed on this date in previous years in ', place_display_name, '!</p>')
           )
@@ -251,9 +255,9 @@ server <- function(input, output, session) {
             assemble_game(
               taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
               user_login = if(input$user_login == '') NULL else input$user_login,
-              bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
-              month      = as.numeric(format(Sys.Date(), "%m")),
-              created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
+              bounds     = bounds,
+              month      = format(Sys.Date(), "%m"),
+              created_d2 = created_d2,
               locale     = r$locale,
               pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in this month in previous years in ', place_display_name, '!</p>')
             )
@@ -262,8 +266,8 @@ server <- function(input, output, session) {
               assemble_game(
                 taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
                 user_login = if(input$user_login == '') NULL else input$user_login,
-                bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
-                created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
+                bounds     = bounds,
+                created_d2 = created_d2,
                 locale     = r$locale,
                 pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed at any time in the past in ', place_display_name, '!</p>')
               )
@@ -294,7 +298,7 @@ server <- function(input, output, session) {
     )
 
     r$target_word <- tolower(choose_taxon(sc, r$current_seed))
-    r$tax_info <- get_tax(r$target_word, TRUE, locale)
+    r$tax_info <- get_tax(r$target_word, TRUE, locale = locale)
     r$ref_obs <- get_observation(taxon_id   = r$tax_info$id,
                                  user_login = user_login,
                                  bounds     = bounds,
@@ -304,6 +308,8 @@ server <- function(input, output, session) {
                                  created_d2 = created_d2,
                                  locale     = locale)
 
+    obstax <- get_tax(taxon_id = r$ref_obs$results[[1]]$taxon$id, locale = locale)
+    
     output$pretext <- renderText({pretext})
 
     output$iurl <- renderText({
@@ -311,36 +317,84 @@ server <- function(input, output, session) {
     })
 
     if('preferred_common_name' %in% names(r$tax_info)) {
-      intro <- paste0("My common name in ", names(locales_list)[locales_list == locale], " is '")
+      
+      intro_genus <- paste0("The common name for my genus in <b>", names(locales_list)[locales_list == locale], "</b> is '")
+      
       if(grepl(r$target_word, r$tax_info$preferred_common_name)) {
         common_genus <- str_replace_all(r$tax_info$preferred_common_name, 
                                         r$target_word, 
                                         paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
-        outro <- "'<br>(The target genus has been hidden)"
+        outro_genus <- "'<br>(The target genus itself has been hidden)"
       } else {
         common_genus <- r$tax_info$preferred_common_name
-        outro <- "'"
+        outro_genus <- "'"
       }
+      
     } else if('english_common_name' %in% names(r$tax_info)) {
-      intro <- paste0("My common name isn't available on iNaturalist in ", names(locales_list)[locales_list == locale], ".<br>In English, it's '")
+      
+      intro_genus <- paste0("The common name for my genus isn't available on iNaturalist in <b>", names(locales_list)[locales_list == locale], "</b>.<br>In English, it's '")
+      
       if(grepl(r$target_word, r$tax_info$english_common_name)) {
         common_genus <- str_replace_all(r$tax_info$english_common_name, 
                                         r$target_word, 
                                         paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
-        outro <- paste0("'<br>(The target genus has been hidden)<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
-                        r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+        outro_genus <- paste0("'<br>(The target genus itself has been hidden)<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
+                              r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
       } else {
         common_genus <- r$tax_info$english_common_name
-        outro <- paste0("'<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
-                        r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+        outro_genus <- paste0("'<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
+                              r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
       }
+      
     } else {
-      intro <- paste0("I don't seem to have a common name!<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", 
-                      r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+      
+      intro_genus <- paste0("There doesn't seem to be a common name for my genus!<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", 
+                            r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
       common_genus <- ''
-      outro <- ''
+      outro_genus <- ''
+      
     }
-    output$common <- renderText(paste0(intro, common_genus, outro))
+    
+    if('preferred_common_name' %in% names(obstax)) {
+      
+      intro_specific <- paste0("My specific common name in <b>", names(locales_list)[locales_list == locale], "</b> is '")
+      
+      if(grepl(r$target_word, obstax$preferred_common_name)) {
+        common_specific <- str_replace_all(obstax$preferred_common_name, 
+                                           r$target_word, 
+                                           paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
+        outro_specific <- "'<br>(The target genus itself has been hidden)"
+      } else {
+        common_specific <- obstax$preferred_common_name
+        outro_specific <- "'"
+      }
+      
+    } else if('english_common_name' %in% names(obstax)) {
+      
+      intro_specific <- paste0("My specific common name isn't available on iNaturalist in <b>", names(locales_list)[locales_list == locale], "</b>.<br>In English, it's '")
+      
+      if(grepl(r$target_word, obstax$english_common_name)) {
+        common_specific <- str_replace_all(obstax$english_common_name, 
+                                           r$target_word, 
+                                           paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
+        outro_specific <- paste0("'<br>(The target genus itself has been hidden)<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
+                                 obstax$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+      } else {
+        common_specific <- obstax$english_common_name
+        outro_specific <- paste0("'<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
+                                 obstax$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+      }
+      
+    } else {
+      
+      intro_specific <- paste0("I don't seem to have a specific common name!<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", 
+                               obstax$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+      common_specific <- ''
+      outro_specific <- ''
+      
+    }
+    
+    output$common <- renderText(paste0(intro_genus, common_genus, outro_genus, '<br>', intro_specific, common_specific, outro_specific))
 
     r$started <- TRUE
 
