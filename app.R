@@ -2,6 +2,11 @@ library(shiny)
 library(htmltools)
 library(bslib)
 library(jsonlite)
+library(i18n)
+
+simplei18n <- grep('-', all_locales, invert = TRUE)
+simplei18n <- sapply(simplei18n, \(x) locale_names[x,2][[1]][all_locales[[x]]])
+locales_list <- setNames(names(simplei18n), simplei18n)
 
 ui <- fluidPage(
   
@@ -27,34 +32,48 @@ ui <- fluidPage(
   includeScript("www/custom.js")
 )
 
-get_inat_obs_nocurl <- function(query = NULL, taxon_name = NULL, taxon_id = NULL,
-  place_id = NULL, quality = NULL, geo = NULL, annotation = NULL, year = NULL,
-  month = NULL, day = NULL, bounds = NULL, maxresults = 100, meta = FALSE)
-{
+# get an iNat tax ID from an arbitrary string or genus
+get_tax <- function(taxon_name, genus = FALSE, locale = NULL) {
+  
+  full_url <- paste0("https://api.inaturalist.org/v1/taxa?q=", 
+                     taxon_name, 
+                     if(!genus) NULL else "&rank=genus", 
+                     if(is.null(locale)) NULL else paste0('&locale=', locale),
+                     "&order=desc&order_by=observations_count&per_page=1")
+  
+  response <- readLines(url(full_url), warn = FALSE)
+  json_response <- paste(response, collapse = "")
+  obj <- fromJSON(json_response, simplifyVector = FALSE)
+
+  res <- obj$results[[1]]
+  
+  return(res)
+  
+}
+
+# get species counts
+get_sc <- function(taxon_id   = NULL, 
+                   year       = NULL, 
+                   month      = NULL, 
+                   day        = NULL, 
+                   bounds     = NULL, 
+                   user_id    = NULL, 
+                   locale     = NULL,
+                   created_d2 = NULL,
+                   maxresults = 200) {
+  
     # Base URL
-    base_url <- "http://www.inaturalist.org/"
+    base_url <- "https://api.inaturalist.org/v1/observations/species_counts/?"
 
     # Construct the query parameters
-    params <- list()
+    params <- list(verifiable = 'true',
+                   photos     = 'true',
+                   hrank      = 'genus',
+                   locale     = locale,
+                   created_d2 = created_d2,
+                   per_page   = maxresults)
 
-    if(!is.null(query)) params$query <- query
-    if(!is.null(taxon_name)) params$taxon_name <- taxon_name
     if(!is.null(taxon_id)) params$taxon_id <- taxon_id
-    if(!is.null(place_id)) params$place_id <- place_id
-    if(!is.null(quality)) {
-      if(!quality %in% c("casual", "research")) {
-        stop("Invalid quality flag. Use 'casual' or 'research'.")
-      }
-      params$quality_grade <- quality
-    }
-    if(!is.null(geo) && geo) params$has <- "geo"
-    if(!is.null(annotation)) {
-      if(length(annotation) != 2 || !all(grepl("\\d+", annotation))) {
-          stop("annotation needs to be a vector of length 2 with numeric IDs.")
-      }
-      params$term_id <- annotation[1]
-      params$term_value_id <- annotation[2]
-    }
     if(!is.null(year)) params$year <- year
     if(!is.null(month)) {
       month <- as.numeric(month)
@@ -74,43 +93,89 @@ get_inat_obs_nocurl <- function(query = NULL, taxon_name = NULL, taxon_id = NULL
       params$nelat <- bounds[3]
       params$nelng <- bounds[4]
     }
-
-    # Limit maxresults to 10000
-    if(maxresults > 10000) stop("maxresults must be <= 10000.")
+    if(!is.null(user_id)) params$user_id <- user_id
 
     # Create URL with query parameters
-    search <- paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&")
+    query <- paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&")
+    full_url <- paste0(base_url, query)
 
-    # Function to perform GET request and handle response
-    get_data <- function(url, maxresults) {
+    response <- readLines(url(full_url), warn = FALSE)
+    json_response <- paste(response, collapse = "")
+    obj <- fromJSON(json_response, simplifyVector=FALSE)
 
-      # Fetch results
-      q_path <- "observations.csv"
-      page_url <- paste0(base_url, q_path, '?', search, "&page=1&per_page=200")
-      data_out <- read.csv(page_url, stringsAsFactors = FALSE)
+    return(obj)
+  
+}
 
-      if(maxresults > 200) {
-          for(i in 2:ceiling(maxresults / 200)) {
-              page_url <- paste0(base_url, q_path, '?', search, "&page=", i, "&per_page=200")
-              data_out <- rbind(data_out, read.csv(page_url, stringsAsFactors = FALSE))
-              if(nrow(data_out) <= maxresults) break
-          }
-      }
+choose_taxon <- function(obj, seed) {
+  
+  set.seed(seed)
 
-      return(data_out)
+  sp_counts <- sapply(obj$results, \(x) x$count)
+  species <- sapply(obj$results, \(x) x$taxon$name)
+  genera <- sapply(strsplit(species, ' '), \(x) x[[1]])
+  
+  gen_counts <- sapply(unique(genera), \(x) sum(sp_counts[genera == x]))
 
+  target_genus <- sample(names(gen_counts), 1, prob = 1 / (gen_counts + 0.1))
+
+  return(target_genus)
+  
+}
+
+get_observation <- function(taxon_id   = NULL, 
+                            year       = NULL, 
+                            month      = NULL, 
+                            day        = NULL, 
+                            bounds     = NULL, 
+                            user_id    = NULL, 
+                            locale     = NULL,
+                            created_d2 = NULL) {
+  
+    # Base URL
+    base_url <- "https://api.inaturalist.org/v1/observations/?"
+
+    # Construct the query parameters
+    params <- list(verifiable = 'true',
+                   photos     = 'true',
+                   hrank      = 'genus',
+                   locale     = locale,
+                   created_d2 = created_d2,
+                   per_page   = 1,
+                   page       = 1)
+
+    if(!is.null(taxon_id)) params$taxon_id <- taxon_id
+    if(!is.null(year)) params$year <- year
+    if(!is.null(month)) {
+      month <- as.numeric(month)
+      if(month < 1 || month > 12) stop("Month must be between 1 and 12.")
+      params$month <- month
     }
-
-    # Fetch data
-    data_out <- get_data(query_url, maxresults)
-
-    # Return results
-    if(meta) {
-      return(list(meta = list(found = nrow(data_out), returned = nrow(data_out)),
-                  data = data_out))
-    } else {
-      return(data_out)
+    if(!is.null(day)) {
+      day <- as.numeric(day)
+      if(day < 1 || day > 31) stop("Day must be between 1 and 31.")
+      params$day <- day
     }
+    if(!is.null(bounds)) {
+      if(length(bounds) != 4) stop("Bounds must have 4 coordinates.")
+      bounds <- unname(bounds)
+      params$swlat <- bounds[1]
+      params$swlng <- bounds[2]
+      params$nelat <- bounds[3]
+      params$nelng <- bounds[4]
+    }
+    if(!is.null(user_id)) params$user_id <- user_id
+
+    # Create URL with query parameters
+    query <- paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&")
+    full_url <- paste0(base_url, query)
+
+    response <- readLines(url(full_url), warn = FALSE)
+    json_response <- paste(response, collapse = "")
+    obj <- fromJSON(json_response, simplifyVector=FALSE)
+
+    return(obj)
+  
 }
 
 server <- function(input, output, session) {
@@ -121,6 +186,9 @@ server <- function(input, output, session) {
                       started      = FALSE,
                       current_seed = NULL,
                       target_word  = character(0),
+                      ref_obs      = NULL,
+                      tax_info     = NULL,
+                      locale       = 'en',
                       all_guesses  = list(),
                       error        = '',
                       finished     = FALSE,
@@ -129,38 +197,9 @@ server <- function(input, output, session) {
                       current_guess_letters = character(0),
                       current_placelevel    = 1)
 
-  words <- read.table('www/words.txt', sep='\t')
-  words[, 1] <- tolower(words[, 1])
-
   placelevels <- c('continent', 'region', 'country', 'settlement')
 
-  # Function Definitions
-  common_names <- function(words_today, obs) {
-    out <- unique(unlist(sapply(words_today,function(x) obs$common_name[grepl(x,tolower(obs$scientific_name))])))
-    out <- out[out != '']
-    return(out)
-  }
-
-  try_date <- function(obs) {
-    words_today <- unique(sapply(obs$scientific_name, \(x) strsplit(x, ' ')[[1]][1]))
-    words_today <- tolower(words_today)
-    words_today <- words_today[words_today %in% words[, 1]]
-    words_today <- words_today[order(words[match(words_today, words[, 1]), 2], decreasing = TRUE)]
-
-    if(length(words_today) <= 5) stop(simpleError('No observations'))
-
-    weights <- sapply(words_today, \(x) sum(grepl(x, tolower(obs$scientific_name))))
-    common <- common_names(words_today, obs)
-
-    list(
-      words_today = words_today,
-      weights     = weights,
-      common      = common,
-      obs         = obs
-    )
-  }
-
-  try_place <- function(placename, placelevel, words) {
+  try_place <- function(placename, placelevel) {
 
     base_url <- "https://nominatim.openstreetmap.org/search"
     query <- paste0("?q=", URLencode(placename), "&format=json&featuretype=", tolower(placelevel))
@@ -177,43 +216,59 @@ server <- function(input, output, session) {
     if(any(is.na(placeBB))) {
 
       r$current_placelevel <- placelevels[[r$current_placelevel + 1]]
-      try_place(input$Place, r$current_placelevel, words)
+      try_place(input$Place, r$current_placelevel)
 
     } else {
 
       tryCatch({
-        obs <- get_inat_obs_nocurl(
+        assemble_game(
           taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
-          bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]),
-          year   = as.numeric(format(Sys.Date() - 1, "%Y")),
-          month  = as.numeric(format(Sys.Date() - 1, "%m")),
-          day    = as.numeric(format(Sys.Date() - 1, "%d"))
+          user_id    = if(input$userid == '') NULL else input$userid,
+          bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
+          year       = as.numeric(format(Sys.Date() - 1, "%Y")),
+          month      = as.numeric(format(Sys.Date() - 1, "%m")),
+          day        = as.numeric(format(Sys.Date() - 1, "%d")),
+          created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
+          locale     = r$locale,
+          pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' yesterday!</p>')
         )
-        assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' yesterday!</p>')))
       }, error = function(e1) {
         tryCatch({
-          obs <- get_inat_obs_nocurl(
+          assemble_game(
             taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
-            bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]),
-            month  = as.numeric(format(Sys.Date(), "%m")),
-            day    = as.numeric(format(Sys.Date(), "%d"))
+            user_id    = if(input$userid == '') NULL else input$userid,
+            bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
+            month      = as.numeric(format(Sys.Date(), "%m")),
+            day        = as.numeric(format(Sys.Date(), "%d")),
+            created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
+            locale     = r$locale,
+            pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' on this date in previous years!</p>')
           )
-          assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' on this date in previous years!</p>')))
         }, error = function(e2) {
           tryCatch({
-            obs <- get_inat_obs_nocurl(
+            assemble_game(
               taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
-              bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]),
-              month = as.numeric(format(Sys.Date(), "%m"))
+              user_id    = if(input$userid == '') NULL else input$userid,
+              bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
+              month      = as.numeric(format(Sys.Date(), "%m")),
+              created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
+              locale     = r$locale,
+              pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' in this month in previous years!</p>')
             )
-            assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' in this month in previous years!</p>')))
           }, error = function(e3) {
             tryCatch({
-              obs <- get_inat_obs_nocurl(
+              assemble_game(
                 taxon_name = if(input$Taxon == 'anything') NULL else input$Taxon,
-                bounds = c(placeBB[2:1, 1], placeBB[2:1, 2]))
-              assemble_game(c(try_date(obs), pretext = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' at any time in the past!</p>')))
-            }, error = function(e4) {r$error <- 'Not enough observations or species; try again'; reset_game()})
+                user_id    = if(input$userid == '') NULL else input$userid,
+                bounds     = c(placeBB[2:1, 1], placeBB[2:1, 2]),
+                created_d2 = format(Sys.Date() - 1, "%Y-%m-%d"),
+                locale     = r$locale,
+                pretext    = paste0('<p style="margin-bottom: 10px">I was drawn from organisms observed in ', placename, ' at any time in the past!</p>')
+              )
+            }, error = function(e4) {
+              r$error <- 'Not enough observations or species; try again'
+              reset_game()
+            })
           })
         })
       })
@@ -221,26 +276,46 @@ server <- function(input, output, session) {
     }
   }
 
-  assemble_game <- function(placeRes) {
+  assemble_game <- function(taxon_name, user_id, bounds, year, month, day, created_d2, locale, pretext) {
+    
+    group_taxon_id <- get_tax(taxon_name)$id
+    
+    sc <- get_sc(
+      taxon_id   = group_taxon_id,
+      user_id    = user_id,
+      bounds     = bounds,
+      year       = year,
+      month      = month,
+      day        = day,
+      created_d2 = created_d2,
+      locale     = locale
+    )
+    ## need to do checks and throw error here?
 
-    output$pretext <- renderText({
-      placeRes$pretext
-    })
+    r$target_word <- tolower(choose_taxon(sc, r$current_seed))
+    r$tax_info <- get_tax(r$target_word, TRUE, locale)
+    r$ref_obs <- get_observation(taxon_id   = r$tax_info$id,
+                                 user_id    = user_id,
+                                 bounds     = bounds,
+                                 year       = year,
+                                 month      = month,
+                                 day        = day,
+                                 created_d2 = created_d2,
+                                 locale     = locale)
 
-    set.seed(r$current_seed)
-
-    newtarget <- sample(placeRes$words_today, 1, prob = 1 / (placeRes$weights + 0.1))
-    refObs <- grep(newtarget, placeRes$obs$scientific_name, ignore.case = TRUE)
-
-    if(length(refObs) > 1) refObs <- sample(refObs, 1)
+    output$pretext <- renderText({pretext})
 
     output$iurl <- renderText({
-      c('<a href="', placeRes$obs$url[refObs], '" target="_blank"><img src="', placeRes$obs$image_url[refObs], '"></a>')
+      c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url),'/medium.jpeg'), '"></a>')
     })
 
-    output$common <- renderText(paste0("'", placeRes$obs$common_name[refObs], "'"))
-
-    r$target_word <- newtarget
+    if('preferred_common_name' %in% names(r$tax_info)) {
+      output$common <- renderText(paste0("My common name in your preferred language is '", r$tax_info$preferred_common_name, "'"))
+    } else if('english_common_name' %in% names(r$tax_info)) {
+      output$common <- renderText(paste0("My common name isn't available on iNaturalist for your preferred language.<br>In English, it's '", r$tax_info$english_common_name, "'<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", r$tax_info$id,"\" target=\"_blank\">add</a> missing names to iNaturalist?"))
+    } else {
+      output$common <- renderText(paste0("I don't seem to have a common name!<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", r$tax_info$id,"\" target=\"_blank\">add</a> missing names to iNaturalist?"))
+    }
 
     r$started <- TRUE
 
@@ -264,6 +339,8 @@ server <- function(input, output, session) {
         HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
         textInput('Place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
         textInput('Taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'</p>")), value = 'Plantae', width = '100%'),
+        textInput('userid', div(h3('Enter a user id'), HTML("<p>or leave it blank</p>")), value = '', width = '100%'),
+        selectInput("locale", h3('Enter the language of your common name hint'), names(locales_list), 'English', width = '100%'),
         actionButton('submit', 'Random genus'),
         actionButton('daily_stable', "Today's genus", inline = TRUE),
         uiOutput('loadtext_ui'),
@@ -306,7 +383,9 @@ server <- function(input, output, session) {
   
   observeEvent(r$submitted, {
     if(r$submitted) {
-      try_place(input$Place, r$current_placelevel, words)
+      r$locale <- locales_list[[input$locale]]
+      r$error <- ""
+      try_place(input$Place, r$current_placelevel)
     }
   })
   
@@ -340,8 +419,7 @@ server <- function(input, output, session) {
   output$common_div <- renderUI({
     if(r$showcommon) {
       list(
-        h4("My common name is:"),
-        textOutput('common'),
+        htmlOutput('common'),
         actionButton('hidecommon', 'Hide common name')
       )
     } else {
@@ -499,6 +577,7 @@ server <- function(input, output, session) {
 }
 
 check_word <- function(guess_str, target_str) {
+
   guess <- strsplit(guess_str, "")[[1]]
   target <- strsplit(target_str, "")[[1]]
 
