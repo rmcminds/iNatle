@@ -275,11 +275,15 @@ server <- function(input, output, session) {
       try_place(input$place, placelevels[[r$current_placelevel]])
 
     } else {
+      
+      # iNaturalist ID number for a taxon specified by the user
+      taxid <- if(input$taxon == 'anything') NULL else get_tax(input$taxon)$id
+      user_login <- if(input$user_login == '') NULL else input$user_login
 
       tryCatch({
         assemble_game(
-          taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
-          user_login = if(input$user_login == '') NULL else input$user_login,
+          taxid      = taxid,
+          user_login = user_login,
           bounds     = bounds,
           year       = format(Sys.Date() - 1, "%Y"),
           month      = format(Sys.Date() - 1, "%m"),
@@ -289,10 +293,11 @@ server <- function(input, output, session) {
           pretext    = paste0('I was observed yesterday in ', place_display_name, '!')
         )
       }, error = function(e1) {
+        print(e1)
         tryCatch({
           assemble_game(
-            taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
-            user_login = if(input$user_login == '') NULL else input$user_login,
+            taxid      = taxid,
+            user_login = user_login,
             bounds     = bounds,
             month      = format(Sys.Date(), "%m"),
             day        = format(Sys.Date(), "%d"),
@@ -301,10 +306,11 @@ server <- function(input, output, session) {
             pretext    = paste0('I was observed on this date in previous years in ', place_display_name, '!')
           )
         }, error = function(e2) {
+          print(e2)
           tryCatch({
             assemble_game(
-              taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
-              user_login = if(input$user_login == '') NULL else input$user_login,
+              taxid      = taxid,
+              user_login = user_login,
               bounds     = bounds,
               month      = format(Sys.Date(), "%m"),
               created_d2 = created_d2,
@@ -312,16 +318,18 @@ server <- function(input, output, session) {
               pretext    = paste0('I was observed in this month in previous years in ', place_display_name, '!')
             )
           }, error = function(e3) {
+            print(e3)
             tryCatch({
               assemble_game(
-                taxon_name = if(input$taxon == 'anything') NULL else input$taxon,
-                user_login = if(input$user_login == '') NULL else input$user_login,
+                taxid      = taxid,
+                user_login = user_login,
                 bounds     = bounds,
                 created_d2 = created_d2,
                 locale     = r$locale,
                 pretext    = paste0('I was observed at some time in the past in ', place_display_name, '!')
               )
             }, error = function(e4) {
+              print(e4)
               r$error <- 'Not enough observations or species; try again'
               reset_game()
             })
@@ -332,14 +340,11 @@ server <- function(input, output, session) {
     }
   }
 
-  assemble_game <- function(taxon_name, user_login, bounds, year, month, day, created_d2, locale, pretext) {
-    
-    # iNaturalist ID number for a taxon specified by the user
-    group_taxon_id <- if(is.null(taxon_name)) NULL else get_tax(taxon_name)$id
+  assemble_game <- function(taxid = NULL, user_login = NULL, bounds = NULL, year = NULL, month = NULL, day = NULL, created_d2 = NULL, locale = NULL, pretext = NULL) {
     
     # Observation counts fitting search criteria
     sc <- get_sc(
-      taxon_id   = group_taxon_id,
+      taxon_id   = taxid,
       user_login = user_login,
       bounds     = bounds,
       year       = year,
