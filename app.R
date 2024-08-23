@@ -418,13 +418,13 @@ server <- function(input, output, session) {
     censorednotice <- "<br>(The target genus itself has been hidden)"
     missingnotice <- paste0("<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
                              if(!'preferred_common_name' %in% names(obstax)) obstax$id else r$tax_info$id, 
-                            "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+                            "\" target=\"_blank\">add</a> missing common names to iNaturalist?")
     
     eithercensored <- attr(common_genus, 'censored') | attr(common_specific, 'censored')
     preferredmissing <- (!'preferred_common_name' %in% names(r$tax_info)) | (!'preferred_common_name' %in% names(obstax))
     
     # Construct full HTML for common names hint
-    output$common <- renderText(paste0(intro_genus, common_genus, "</em>"[common_genus!=''], "<br>", intro_specific, common_specific, "</em>"[common_specific!=''], censorednotice[eithercensored], missingnotice[preferredmissing]))
+    output$common <- renderText(paste0(intro_genus, common_genus, ".</em>"[common_genus!=''], "<br>", intro_specific, common_specific, ".</em>"[common_specific!=''], censorednotice[eithercensored], missingnotice[preferredmissing]))
 
     # Begin the game!
     r$started <- TRUE
