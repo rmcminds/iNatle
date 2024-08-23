@@ -420,7 +420,7 @@ server <- function(input, output, session) {
       
     }
     
-    censorednotice <- "<br>(The target genus itself has been hidden)"
+    censorednotice <- "<br>(Similarities to the target genus itself have been hidden)"
     missingnotice <- paste0("<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
                              if(!'preferred_common_name' %in% names(obstax)) obstax$id else r$tax_info$id, 
                             "\" target=\"_blank\">add</a> missing common names to iNaturalist?")
