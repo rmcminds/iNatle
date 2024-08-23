@@ -277,7 +277,7 @@ server <- function(input, output, session) {
     } else {
       
       # iNaturalist ID number for a taxon specified by the user
-      taxid <- if(input$taxon == 'anything') NULL else get_tax(input$taxon)$id
+      taxid <- if(tolower(input$taxon) == 'anything') NULL else get_tax(input$taxon)$id
       user_login <- if(input$user_login == '') NULL else input$user_login
 
       tryCatch({
@@ -354,6 +354,8 @@ server <- function(input, output, session) {
       locale     = locale,
       page       = r$difficulty
     )
+    
+    if(sc$total_results == 0) stop(simpleError('No observations matching criteria'))
 
     # Today's target genus
     r$target_word <- tolower(choose_taxon(sc, r$current_seed))
@@ -550,7 +552,7 @@ server <- function(input, output, session) {
   # Rendering UI Elements
   output$previous_guesses <- renderUI({
     res <- lapply(r$all_guesses, function(guess) {
-      letters <- c(guess$letters, rep(' ', length(guess$matches) - length(guess$letters)))
+      letters <- guess$letters
       row <- mapply(letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE, FUN = function(letter, match) {
         match_type <- match
         div(toupper(letter), class = paste("letter", match_type))
@@ -590,7 +592,7 @@ server <- function(input, output, session) {
     letter_matches <- list()
 
     lapply(r$all_guesses, function(guess) {
-      letters <- c(guess$letters, rep(' ', length(guess$matches) - length(guess$letters)))
+      letters <- guess$letters
       mapply(letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE, FUN = function(letter, match) {
                prev_match <- letter_matches[[letter]]
                if(is.null(prev_match) ||
@@ -692,20 +694,19 @@ server <- function(input, output, session) {
 }
 
 check_word <- function(guess_str, target_str) {
-
-  guess <- strsplit(guess_str, "")[[1]]
+  
   target <- strsplit(target_str, "")[[1]]
+  guess <- strsplit(guess_str, "")[[1]]
+  guess <- c(guess, rep(' ', length(target) - length(guess)))
 
-  result <- rep("not-in-word", length(target))
+  result <- rep("not-in-word", length(guess))
   remaining <- character(0)
 
-  for(i in seq_along(target)) {
-    if(i <= length(guess)) {
-      if(guess[i] == target[i]) {
-        result[i] <- "correct"
-      } else {
-        remaining <- c(remaining, target[i])
-      }
+  for(i in seq_along(guess)) {
+    if(guess[i] == target[i]) {
+      result[i] <- "correct"
+    } else {
+      remaining <- c(remaining, target[i])
     }
   }
 
