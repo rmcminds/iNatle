@@ -379,7 +379,7 @@ server <- function(input, output, session) {
 
     # HTML for image and link
     output$iurl <- renderText({
-      c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url), '/medium.jpeg'), '"></a>')
+      c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url), '/', sub('square', 'medium', basename(r$ref_obs$results[[1]]$photos[[1]]$url))), '"></a>')
     })
 
     # Contsruct common genus name hint
