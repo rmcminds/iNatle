@@ -4,6 +4,7 @@ library(bslib)
 library(jsonlite)
 library(i18n)
 library(stringr)
+library(stringi)
 
 # Create list of language options
 simplei18n <- grep('-', all_locales, invert = TRUE)
@@ -67,6 +68,7 @@ get_sc <- function(taxon_id   = NULL,
                    user_login = NULL, 
                    locale     = NULL,
                    created_d2 = NULL,
+                   page       = 1,
                    maxresults = 200) {
   
     # Base URL
@@ -78,7 +80,8 @@ get_sc <- function(taxon_id   = NULL,
                    hrank      = 'genus',
                    locale     = locale,
                    created_d2 = created_d2,
-                   per_page   = maxresults)
+                   per_page   = maxresults,
+                   page       = page)
 
     if(!is.null(taxon_id)) params$taxon_id <- taxon_id
     if(!is.null(year)) params$year <- year
@@ -187,11 +190,52 @@ get_observation <- function(taxon_id   = NULL,
   
 }
 
+# Find all 5-letter substrings with up to one mismatch between target and hint, and censor them so the hint doesn't make it too easy
+censor_hints <- function(target, hint) {
+  
+  target_length <- nchar(target)
+  target_segments <- sapply(1:(target_length-4), \(i) substr(stri_trans_general(tolower(target), "Latin-ASCII"), i, i+4))
+  
+  pattern <- paste(sapply(target_segments, \(x) sapply(1:5, \(y) paste0(substr(x, 1, y-1), '.?', substr(x, y+1, nchar(x))))), collapse='|')
+  
+  # Allow overlapping matches (adding 'PCRE' pattern...)
+  pattern <- paste0('(?=(', pattern, '))')
+  
+  # Find matches in the original string, using normalized version
+  matches <- gregexpr(pattern, stri_trans_general(tolower(hint), "Latin-ASCII"), perl = TRUE)
+  
+  # Get positions of matches
+  match_positions <- unlist(matches)
+  
+  # Initialize modified string
+  modified_string <- hint
+  attr(modified_string, 'censored') <- FALSE
+  
+  # Replace matches in the original string at the identified positions
+  if(length(match_positions) > 0 && match_positions[1] != -1) {
+    for(i in 1:length(match_positions)) {
+      # Replace the matching characters with dashes
+      modified_string <- paste0(
+        substr(modified_string, 1, match_positions[[i]] - 1), 
+        paste(rep('-', attr(matches[[1]], 'capture.length')[[i]]), collapse = ''), 
+        substr(modified_string, match_positions[[i]] + attr(matches[[1]], 'capture.length')[[i]], nchar(modified_string))
+      )
+    }
+    
+    attr(modified_string, 'censored') <- TRUE
+
+  }
+  
+  return(modified_string)
+  
+}
+
 # Do all the real work
 server <- function(input, output, session) {
   
   # Reactive Values Initialization
   r <- reactiveValues(submitted    = FALSE,
+                      difficulty   = 1,  # not yet exposed - might not be as simple as page number (e.g. consider what do when fewer than per_page results!)
                       loadtext     = '',
                       started      = FALSE,
                       current_seed = NULL,
@@ -302,7 +346,8 @@ server <- function(input, output, session) {
       month      = month,
       day        = day,
       created_d2 = created_d2,
-      locale     = locale
+      locale     = locale,
+      page       = r$difficulty
     )
 
     # Today's target genus
@@ -335,85 +380,51 @@ server <- function(input, output, session) {
     # Contsruct common genus name hint
     if('preferred_common_name' %in% names(r$tax_info)) {
       
-      intro_genus <- paste0("The common name for my genus in <b>", names(locales_list)[locales_list == locale], "</b> is '")
-      
-      if(grepl(r$target_word, r$tax_info$preferred_common_name)) {
-        common_genus <- str_replace_all(r$tax_info$preferred_common_name, 
-                                        r$target_word, 
-                                        paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
-        outro_genus <- "'<br>(The target genus itself has been hidden)"
-      } else {
-        common_genus <- r$tax_info$preferred_common_name
-        outro_genus <- "'"
-      }
+      intro_genus <- paste0("The common name for my genus in <b>", names(locales_list)[locales_list == locale], "</b> is <em>")
+      common_genus <- censor_hints(r$target_word, r$tax_info$preferred_common_name)
       
     } else if('english_common_name' %in% names(r$tax_info)) {
       
-      intro_genus <- paste0("The common name for my genus isn't available on iNaturalist in <b>", names(locales_list)[locales_list == locale], "</b>.<br>In English, it's '")
-      
-      if(grepl(r$target_word, r$tax_info$english_common_name)) {
-        common_genus <- str_replace_all(r$tax_info$english_common_name, 
-                                        r$target_word, 
-                                        paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
-        outro_genus <- paste0("'<br>(The target genus itself has been hidden)<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
-                              r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
-      } else {
-        common_genus <- r$tax_info$english_common_name
-        outro_genus <- paste0("'<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
-                              r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
-      }
+      intro_genus <- paste0("The common name for my genus isn't available on iNaturalist in <b>", names(locales_list)[locales_list == locale], "</b>.<br>In English, it's <em>")
+      common_genus <- censor_hints(r$target_word, r$tax_info$english_common_name)
       
     } else {
       
-      intro_genus <- paste0("There doesn't seem to be a common name for my genus!<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", 
-                            r$tax_info$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+      intro_genus <- paste0("There doesn't seem to be a common name for my genus!")
       common_genus <- ''
-      outro_genus <- ''
-      
+      attr(common_genus, 'censored') <- FALSE
+
     }
     
     # Construct specific common name hint
     if('preferred_common_name' %in% names(obstax)) {
       
-      intro_specific <- paste0("My specific common name in <b>", names(locales_list)[locales_list == locale], "</b> is '")
-      
-      if(grepl(r$target_word, obstax$preferred_common_name)) {
-        common_specific <- str_replace_all(obstax$preferred_common_name, 
-                                           r$target_word, 
-                                           paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
-        outro_specific <- "'<br>(The target genus itself has been hidden)"
-      } else {
-        common_specific <- obstax$preferred_common_name
-        outro_specific <- "'"
-      }
+      intro_specific <- paste0("My specific common name in <b>", names(locales_list)[locales_list == locale], "</b> is <em>")
+      common_specific <- censor_hints(r$target_word, obstax$preferred_common_name)
       
     } else if('english_common_name' %in% names(obstax)) {
       
-      intro_specific <- paste0("My specific common name isn't available on iNaturalist in <b>", names(locales_list)[locales_list == locale], "</b>.<br>In English, it's '")
-      
-      if(grepl(r$target_word, obstax$english_common_name)) {
-        common_specific <- str_replace_all(obstax$english_common_name, 
-                                           r$target_word, 
-                                           paste(rep('-', length(strsplit(r$target_word)[[1]])), collapse=''))
-        outro_specific <- paste0("'<br>(The target genus itself has been hidden)<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
-                                 obstax$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
-      } else {
-        common_specific <- obstax$english_common_name
-        outro_specific <- paste0("'<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
-                                 obstax$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
-      }
+      intro_specific <- paste0("My specific common name isn't available on iNaturalist in <b>", names(locales_list)[locales_list == locale], "</b>.<br>In English, it's <em>")
+      common_specific <- censor_hints(r$target_word, obstax$english_common_name)
       
     } else {
       
-      intro_specific <- paste0("I don't seem to have a specific common name!<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/", 
-                               obstax$id, "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+      intro_specific <- paste0("I don't seem to have a specific common name!")
       common_specific <- ''
-      outro_specific <- ''
+      attr(common_specific, 'censored') <- FALSE
       
     }
     
-    # Construct full HTML for common name hint
-    output$common <- renderText(paste0(intro_genus, common_genus, outro_genus, '<br>', intro_specific, common_specific, outro_specific))
+    censorednotice <- "<br>(The target genus itself has been hidden)"
+    missingnotice <- paste0("<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
+                             if(!'preferred_common_name' %in% names(obstax)) obstax$id else r$tax_info$id, 
+                            "\" target=\"_blank\">add</a> missing names to iNaturalist?")
+    
+    eithercensored <- attr(common_genus, 'censored') | attr(common_specific, 'censored')
+    preferredmissing <- (!'preferred_common_name' %in% names(r$tax_info)) | (!'preferred_common_name' %in% names(obstax))
+    
+    # Construct full HTML for common names hint
+    output$common <- renderText(paste0(intro_genus, common_genus, "</em>"[common_genus!=''], "<br>", intro_specific, common_specific, "</em>"[common_specific!=''], censorednotice[eithercensored], missingnotice[preferredmissing]))
 
     # Begin the game!
     r$started <- TRUE
