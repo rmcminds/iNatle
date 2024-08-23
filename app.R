@@ -335,7 +335,7 @@ server <- function(input, output, session) {
   assemble_game <- function(taxon_name, user_login, bounds, year, month, day, created_d2, locale, pretext) {
     
     # iNaturalist ID number for a taxon specified by the user
-    group_taxon_id <- get_tax(taxon_name)$id
+    group_taxon_id <- if(is.null(taxon_name)) NULL else get_tax(taxon_name)$id
     
     # Observation counts fitting search criteria
     sc <- get_sc(
