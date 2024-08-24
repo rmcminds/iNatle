@@ -256,19 +256,6 @@ server <- function(input, output, session) {
 
   placelevels <- c('continent', 'region', 'country', 'settlement')
 
-  # iNaturalist ID number for a taxon specified by the user
-  try_taxon <- function(taxname) {
-    
-    if(taxname == '') {
-     taxid <-  NULL
-    } else {
-     tryCatch({
-       taxid <- get_tax(taxname)$id
-     }, error = \(e) NA)
-    }
-    
-  }
-
   try_place <- function(placename, placelevel, taxid) {
     
     if(placename == '') {
@@ -540,8 +527,17 @@ server <- function(input, output, session) {
       r$user_login <- input$user_login
       r$locale <- locales_list[[input$locale]]
       r$error <- ""
-      taxid <- try_taxon(r$input_taxon)
-      if(!is.na(taxid)) {
+          
+      # iNaturalist ID number for a taxon specified by the user
+      if(r$input_taxon == '') {
+        taxid <-  NULL
+      } else {
+        tryCatch({
+          taxid <- get_tax(taxname)$id
+        }, error = \(e) taxid <- NA)
+      }
+      
+      if(!anyNA(taxid)) {
         try_place(r$placename, placelevels[[r$current_placelevel]], taxid)
       } else {
         r$error <- 'Input taxon is not recognized'
