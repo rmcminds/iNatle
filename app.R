@@ -69,7 +69,7 @@ get_sc <- function(taxon_id   = NULL,
                    locale     = NULL,
                    created_d2 = NULL,
                    page       = 1,
-                   maxresults = 200) {
+                   per_page   = 200) {
   
     # Base URL
     base_url <- "https://api.inaturalist.org/v1/observations/species_counts/?"
@@ -80,7 +80,7 @@ get_sc <- function(taxon_id   = NULL,
                    hrank      = 'genus',
                    locale     = locale,
                    created_d2 = created_d2,
-                   per_page   = maxresults,
+                   per_page   = per_page,
                    page       = page)
 
     if(!is.null(taxon_id)) params$taxon_id <- taxon_id
@@ -128,7 +128,7 @@ choose_taxon <- function(obj, seed) {
   
   gen_counts <- sapply(unique(genera), \(x) sum(sp_counts[genera == x]))
 
-  target_genus <- sample(names(gen_counts), 1, prob = 1 / (gen_counts + 0.1))
+  target_genus <- sample(names(gen_counts), 1)
 
   return(target_genus)
   
@@ -235,14 +235,17 @@ server <- function(input, output, session) {
   
   # Reactive Values Initialization
   r <- reactiveValues(submitted    = FALSE,
-                      difficulty   = 1,  # not yet exposed - might not be as simple as page number (e.g. consider what do when fewer than per_page results!)
-                      loadtext     = '',
+                      per_page     = 200,
+                      difficulty   = 1,
+                      placename    = 'Oregon',
+                      input_taxon  = 'Plantae',
+                      user_login   = '',
+                      locale       = 'en',
                       started      = FALSE,
                       current_seed = NULL,
                       target_word  = character(0),
                       ref_obs      = NULL,
                       tax_info     = NULL,
-                      locale       = 'en',
                       all_guesses  = list(),
                       error        = '',
                       finished     = FALSE,
@@ -253,18 +256,40 @@ server <- function(input, output, session) {
 
   placelevels <- c('continent', 'region', 'country', 'settlement')
 
-  try_place <- function(placename, placelevel) {
+  # iNaturalist ID number for a taxon specified by the user
+  try_taxon <- function(taxname) {
+    
+    if(taxname == '') {
+     taxid <-  NULL
+    } else {
+     tryCatch({
+       taxid <- get_tax(taxname)$id
+     }, error = \(e) NA)
+    }
+    
+  }
 
-    base_url <- "https://nominatim.openstreetmap.org/search"
-    query <- paste0("?q=", URLencode(placename), "&format=json&featuretype=", tolower(placelevel))
-    full_url <- paste0(base_url, query)
-
-    response <- readLines(url(full_url), warn = FALSE)
-    json_response <- paste(response, collapse = "")
-    obj <- fromJSON(json_response, simplifyVector=FALSE)[[1]]
-
-    place_display_name <- obj$display_name
-    bounds <- as.numeric(obj$boundingbox)[c(1,3,2,4)]
+  try_place <- function(placename, placelevel, taxid) {
+    
+    if(placename == '') {
+      
+      bounds <- NULL
+      place_display_name <- NULL
+      
+    } else {
+  
+      base_url <- "https://nominatim.openstreetmap.org/search"
+      query <- paste0("?q=", URLencode(placename), "&format=json&featuretype=", tolower(placelevel))
+      full_url <- paste0(base_url, query)
+  
+      response <- readLines(url(full_url), warn = FALSE)
+      json_response <- paste(response, collapse = "")
+      obj <- fromJSON(json_response, simplifyVector=FALSE)[[1]]
+  
+      place_display_name <- obj$display_name
+      bounds <- as.numeric(obj$boundingbox)[c(1,3,2,4)]
+    
+    }
     
     # This should help stabilize the queries throughout the day
     created_d2 <- format(Sys.Date() - 1, "%Y-%m-%d")
@@ -272,12 +297,10 @@ server <- function(input, output, session) {
     if(any(is.na(bounds))) {
 
       r$current_placelevel <- r$current_placelevel + 1
-      try_place(input$place, placelevels[[r$current_placelevel]])
+      try_place(placename, placelevels[[r$current_placelevel]], taxid)
 
     } else {
       
-      # iNaturalist ID number for a taxon specified by the user
-      taxid <- if(tolower(input$taxon) == 'anything') NULL else get_tax(input$taxon)$id
       user_login <- if(input$user_login == '') NULL else input$user_login
 
       tryCatch({
@@ -289,8 +312,7 @@ server <- function(input, output, session) {
           month      = format(Sys.Date() - 1, "%m"),
           day        = format(Sys.Date() - 1, "%d"),
           created_d2 = created_d2,
-          locale     = r$locale,
-          pretext    = paste0('I was observed yesterday in ', place_display_name, '!')
+          pretext    = paste0('I was observed yesterday', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
         )
       }, error = function(e1) {
         print(e1)
@@ -302,8 +324,7 @@ server <- function(input, output, session) {
             month      = format(Sys.Date(), "%m"),
             day        = format(Sys.Date(), "%d"),
             created_d2 = created_d2,
-            locale     = r$locale,
-            pretext    = paste0('I was observed on this date in previous years in ', place_display_name, '!')
+            pretext    = paste0('I was observed on this date ', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
           )
         }, error = function(e2) {
           print(e2)
@@ -314,8 +335,7 @@ server <- function(input, output, session) {
               bounds     = bounds,
               month      = format(Sys.Date(), "%m"),
               created_d2 = created_d2,
-              locale     = r$locale,
-              pretext    = paste0('I was observed in this month in previous years in ', place_display_name, '!')
+              pretext    = paste0('I was observed in this month of the year', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
             )
           }, error = function(e3) {
             print(e3)
@@ -325,12 +345,11 @@ server <- function(input, output, session) {
                 user_login = user_login,
                 bounds     = bounds,
                 created_d2 = created_d2,
-                locale     = r$locale,
-                pretext    = paste0('I was observed at some time in the past in ', place_display_name, '!')
+                pretext    = paste0('I was observed at some time in the past', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
               )
             }, error = function(e4) {
               print(e4)
-              r$error <- 'Not enough observations or species; try again'
+              r$error <- 'No observations match all inputs; try again'
               reset_game()
             })
           })
@@ -340,7 +359,7 @@ server <- function(input, output, session) {
     }
   }
 
-  assemble_game <- function(taxid = NULL, user_login = NULL, bounds = NULL, year = NULL, month = NULL, day = NULL, created_d2 = NULL, locale = NULL, pretext = NULL) {
+  assemble_game <- function(taxid = NULL, user_login = NULL, bounds = NULL, year = NULL, month = NULL, day = NULL, created_d2 = NULL, pretext = NULL) {
     
     # Observation counts fitting search criteria
     sc <- get_sc(
@@ -351,17 +370,41 @@ server <- function(input, output, session) {
       month      = month,
       day        = day,
       created_d2 = created_d2,
-      locale     = locale,
-      page       = r$difficulty
+      locale     = r$locale,
+      page       = r$difficulty,
+      per_page   = r$per_page
     )
     
     if(sc$total_results == 0) stop(simpleError('No observations matching criteria'))
 
+    # If difficulty is just the page number, then must be limited to number of pages
+    max_difficulty <- ceiling(sc$total_results / 200)
+    if(r$difficulty > max_difficulty) { 
+      
+      r$difficulty <- max_difficulty
+      r$error <- paste0('Difficulty scaled down due to low number of species')
+      
+      # Get the last page, since first attempt would have returned nothing
+      sc <- get_sc(
+        taxon_id   = taxid,
+        user_login = user_login,
+        bounds     = bounds,
+        year       = year,
+        month      = month,
+        day        = day,
+        created_d2 = created_d2,
+        locale     = r$locale,
+        page       = r$difficulty,
+        per_page   = r$per_page
+      )
+      
+    }
+    
     # Today's target genus
     r$target_word <- tolower(choose_taxon(sc, r$current_seed))
     
     # Taxonomy infor for today's target genus
-    r$tax_info <- get_tax(r$target_word, TRUE, locale = locale)
+    r$tax_info <- get_tax(r$target_word, TRUE, locale = r$locale)
     
     # Today's observation
     r$ref_obs <- get_observation(taxon_id   = r$tax_info$id,
@@ -371,10 +414,10 @@ server <- function(input, output, session) {
                                  month      = month,
                                  day        = day,
                                  created_d2 = created_d2,
-                                 locale     = locale)
+                                 locale     = r$locale)
 
     # Taxonomy info for today's observation
-    obstax <- get_tax(taxon_id = r$ref_obs$results[[1]]$taxon$id, locale = locale)
+    obstax <- get_tax(taxon_id = r$ref_obs$results[[1]]$taxon$id, locale = r$locale)
     
     # Explanation of today's observation
     output$pretext <- renderText({ paste0('<p style="margin-bottom: 10px">', pretext, '</p>') })
@@ -387,12 +430,12 @@ server <- function(input, output, session) {
     # Contsruct common genus name hint
     if('preferred_common_name' %in% names(r$tax_info)) {
       
-      intro_genus <- paste0("The common name for my genus in <b>", names(locales_list)[locales_list == locale], "</b> is <em>")
+      intro_genus <- paste0("The common name for my genus in <b>", names(locales_list)[locales_list == r$locale], "</b> is <em>")
       common_genus <- censor_hints(r$target_word, r$tax_info$preferred_common_name)
       
     } else if('english_common_name' %in% names(r$tax_info)) {
       
-      intro_genus <- paste0("The common name for my genus isn't available on iNaturalist in <b>", names(locales_list)[locales_list == locale], "</b>.<br>In English, it's <em>")
+      intro_genus <- paste0("The common name for my genus isn't available on iNaturalist in <b>", names(locales_list)[locales_list == r$locale], "</b>.<br>In English, it's <em>")
       common_genus <- censor_hints(r$target_word, r$tax_info$english_common_name)
       
     } else {
@@ -406,12 +449,12 @@ server <- function(input, output, session) {
     # Construct specific common name hint
     if('preferred_common_name' %in% names(obstax)) {
       
-      intro_specific <- paste0("My specific common name in <b>", names(locales_list)[locales_list == locale], "</b> is <em>")
+      intro_specific <- paste0("My specific common name in <b>", names(locales_list)[locales_list == r$locale], "</b> is <em>")
       common_specific <- censor_hints(r$target_word, obstax$preferred_common_name)
       
     } else if('english_common_name' %in% names(obstax)) {
       
-      intro_specific <- paste0("My specific common name isn't available on iNaturalist in <b>", names(locales_list)[locales_list == locale], "</b>.<br>In English, it's <em>")
+      intro_specific <- paste0("My specific common name isn't available on iNaturalist in <b>", names(locales_list)[locales_list == r$locale], "</b>.<br>In English, it's <em>")
       common_specific <- censor_hints(r$target_word, obstax$english_common_name)
       
     } else {
@@ -454,13 +497,12 @@ server <- function(input, output, session) {
       tagList(
         h3("Set up!"),
         HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
-        textInput('place', h3('Enter a place name'), value = 'Oregon', width = '100%'),
-        textInput('taxon', div(h3('Enter a taxonomic group'), HTML("<p>or 'anything'</p>")), value = 'Plantae', width = '100%'),
-        textInput('user_login', div(h3('Enter a user login name'), HTML("<p>or leave it blank</p>")), value = '', width = '100%'),
-        selectInput("locale", h3('Enter the language of your common name hint'), names(locales_list), 'English', width = '100%'),
+        textInput('place',      div(h3('Enter a place name'),      HTML("<p>or leave it blank</p>")), value = r$placename,   width = '100%'),
+        textInput('taxon',      div(h3('Enter a taxonomic group'), HTML("<p>or leave it blank</p>")), value = r$input_taxon, width = '100%'),
+        textInput('user_login', div(h3('Enter a user login name'), HTML("<p>or leave it blank</p>")), value = r$user_login,  width = '100%'),
+        selectInput("locale", h3('Enter the language of your common name hint'), names(locales_list), names(locales_list)[locales_list == r$locale], width = '100%'),
         actionButton('submit', 'Random genus'),
         actionButton('daily_stable', "Today's genus", inline = TRUE),
-        uiOutput('loadtext_ui'),
         uiOutput('error_ui')
       )
     } else {
@@ -479,30 +521,32 @@ server <- function(input, output, session) {
   })
   
   observeEvent(input$daily_stable, {
-    r$loadtext <- "Loading today's genus..."
     r$current_seed <- format(Sys.Date(), '%Y%m%d')
     r$submitted <- TRUE
   })
   
   observeEvent(input$submit, {
-    r$loadtext <- 'Loading random genus...'
     r$submitted <- TRUE
-  })
-
-  # Observing Events
-  output$loadtext_ui <- renderUI({
-    p(r$loadtext)
   })
   
    output$error_ui <- renderUI({
-    p(r$error)
+    HTML(paste0('<p style="margin-top: 10px">', r$error, '</p>'))
   })
   
   observeEvent(r$submitted, {
     if(r$submitted) {
+      r$placename <- input$place
+      r$input_taxon <- input$taxon
+      r$user_login <- input$user_login
       r$locale <- locales_list[[input$locale]]
       r$error <- ""
-      try_place(input$place, placelevels[[r$current_placelevel]])
+      taxid <- try_taxon(r$input_taxon)
+      if(!is.na(taxid)) {
+        try_place(r$placename, placelevels[[r$current_placelevel]], taxid)
+      } else {
+        r$error <- 'Input taxon is not recognized'
+        reset_game()
+      }
     }
   })
   
