@@ -19,6 +19,7 @@ ui <- fluidPage(
   tags$style(type='text/css', "#hideimage { margin: 5px; }"),
   tags$style(type='text/css', "#showcommon { margin: 5px; }"),
   tags$style(type='text/css', "#hidecommon { margin: 5px; }"),
+  tags$style(type='text/css', "#difficulty { text-align: center; }"),
   
   title = "iNatle: Local Genera",
 
@@ -365,11 +366,11 @@ server <- function(input, output, session) {
     if(sc$total_results == 0) stop(simpleError('No observations matching criteria'))
 
     # If difficulty is just the page number, then must be limited to number of pages
-    max_difficulty <- ceiling(sc$total_results / 200)
+    max_difficulty <- ceiling(sc$total_results / r$per_page)
     if(r$difficulty > max_difficulty) { 
       
       r$difficulty <- max_difficulty
-      r$error <- paste0('Difficulty scaled down due to low number of species')
+      r$error <- paste0('Difficulty scaled down due to low number of species that match query')
       
       # Get the last page, since first attempt would have returned nothing
       sc <- get_sc(
@@ -487,6 +488,7 @@ server <- function(input, output, session) {
         textInput('place',      div(h3('Enter a place name'),      HTML("<p>or leave it blank</p>")), value = r$placename,   width = '100%'),
         textInput('taxon',      div(h3('Enter a taxonomic group'), HTML("<p>or leave it blank</p>")), value = r$input_taxon, width = '100%'),
         textInput('user_login', div(h3('Enter a user login name'), HTML("<p>or leave it blank</p>")), value = r$user_login,  width = '100%'),
+        numericInput('difficulty', div(h3('Enter a difficulty level'), HTML("<p>larger numbers = less common genera</p>")), value = r$difficulty, min = 0, step = 1, width = '100%'),
         selectInput("locale", h3('Enter the language of your common name hint'), names(locales_list), names(locales_list)[locales_list == r$locale], width = '100%'),
         actionButton('submit', 'Random genus'),
         actionButton('daily_stable', "Today's genus", inline = TRUE),
@@ -525,6 +527,7 @@ server <- function(input, output, session) {
       r$placename <- input$place
       r$input_taxon <- input$taxon
       r$user_login <- input$user_login
+      r$difficulty <- input$difficulty
       r$locale <- locales_list[[input$locale]]
       r$error <- ""
           
@@ -533,7 +536,7 @@ server <- function(input, output, session) {
         taxid <-  NULL
       } else {
         tryCatch({
-          taxid <- get_tax(taxname)$id
+          taxid <- get_tax(r$input_taxon)$id
         }, error = \(e) taxid <- NA)
       }
       
