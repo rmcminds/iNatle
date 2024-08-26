@@ -128,14 +128,15 @@ get_observations <- function(taxon_id   = NULL,
 }
 
 # Choose the word of the day
-choose_taxon <- function(obj) {
+choose_taxon <- function(obj, maxchar = 100) {
 
   sp_counts <- sapply(obj$results, \(x) x$count)
   species <- sapply(obj$results, \(x) x$taxon$name)
   genera <- sapply(strsplit(species, ' '), \(x) x[[1]])
   
   gen_counts <- sapply(unique(genera), \(x) sum(sp_counts[genera == x]))
-
+  gen_counts <- gen_counts[sapply(strsplit(unique(genera),''), length) <= maxchar]
+  
   target_genus <- sample(names(gen_counts), 1)
 
   return(target_genus)
@@ -188,7 +189,8 @@ server <- function(input, output, session) {
   # Reactive Values Initialization
   r <- reactiveValues(is_random    = TRUE,
                       per_page     = 200,
-                      difficulty   = 1,
+                      rarity   = 1,
+                      maxchar      = 10,
                       placename    = 'Oregon',
                       input_taxon  = 'Plantae',
                       user_login   = '',
@@ -327,18 +329,18 @@ server <- function(input, output, session) {
       created_d2 = created_d2,
       locale     = r$locale,
       counts     = TRUE,
-      page       = r$difficulty,
+      page       = r$rarity,
       per_page   = r$per_page
     )
     
     if(sc$total_results == 0) stop(simpleError('No observations matching criteria'))
 
-    # If difficulty is just the page number, then must be limited to number of pages
-    max_difficulty <- ceiling(sc$total_results / r$per_page)
-    if(r$difficulty > max_difficulty) { 
+    # If rarity is just the page number, then must be limited to number of pages
+    max_rarity <- ceiling(sc$total_results / r$per_page)
+    if(r$rarity > max_rarity) { 
       
-      r$difficulty <- max_difficulty
-      r$notices <- 'Difficulty scaled down due to low number of species that match query'
+      r$rarity <- max_rarity
+      r$notices <- 'Rarity scaled down due to low number of species that match query'
       
       # Get the last page, since first attempt would have returned nothing
       sc <- get_observations(
@@ -351,14 +353,14 @@ server <- function(input, output, session) {
         created_d2 = created_d2,
         locale     = r$locale,
         counts     = TRUE,
-        page       = r$difficulty,
+        page       = r$rarity,
         per_page   = r$per_page
       )
       
     }
     
     # Today's target genus
-    r$target_word <- tolower(choose_taxon(sc))
+    r$target_word <- tolower(choose_taxon(sc, r$maxchar))
     
     # Taxonomy info for today's target genus
     r$tax_info <- get_tax(r$target_word, TRUE, locale = r$locale)
@@ -473,10 +475,14 @@ server <- function(input, output, session) {
       hr(),
       
       HTML("<p><b>Or, generate a random game</b><br>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
-      textInput('place',      HTML("<b>Enter a place name</b><br>or leave it blank"), value = isolate(r$placename),   width = '100%'),
-      textInput('taxon',      HTML("<b>Enter a taxonomic group</b><br>or leave it blank"), value = isolate(r$input_taxon), width = '100%'),
-      textInput('user_login', HTML("<b>Enter a user login name</b><br>or leave it blank"), value = isolate(r$user_login),  width = '100%'),
-      numericInput('difficulty', HTML("<b>Enter a difficulty level</b><br>larger numbers = less common genera"), value = isolate(r$difficulty), min = 0, step = 1, width = '100%'),
+      textInput('place',         HTML("<b>Enter a place name</b><br>or leave it blank"),      value = isolate(r$placename),   width = '100%'),
+      textInput('taxon',         HTML("<b>Enter a taxonomic group</b><br>or leave it blank"), value = isolate(r$input_taxon), width = '100%'),
+      textInput('user_login',    HTML("<b>Enter a user login name</b><br>or leave it blank"), value = isolate(r$user_login),  width = '100%'),
+      HTML("<b>Enter difficulty parameters</b>"),
+      fluidRow(
+        column(6, numericInput('rarity', "Species rarity",   value = isolate(r$rarity),  min = 1, step = 1, width = '100%')),
+        column(6, numericInput('maxchar', "Max word length", value = isolate(r$maxchar), min = 4, step = 1, width = '100%'))
+      ),
       actionButton('submit_random', 'Random genus')
     )
   })
@@ -518,7 +524,8 @@ server <- function(input, output, session) {
         r$placename <- input$place
         r$input_taxon <- input$taxon
         r$user_login <- input$user_login
-        r$difficulty <- input$difficulty
+        r$rarity <- input$rarity
+        r$maxchar <- input$maxchar
     
         # iNaturalist ID number for a taxon specified by the user
         if(r$input_taxon == '') {
@@ -736,6 +743,8 @@ server <- function(input, output, session) {
     })
     div(class = "endgame-content", 
       HTML(paste0('<a href="https://thecnidaegritty.org/iNatle/" target="_blank">iNatle</a> ID: ', r$ref_obs$results[[1]]$id,
+                  '<br>Place: ', r$placename,
+                  '<br>Taxon: ', r$input_taxon,
                   '<br>Hint language: ', names(locales_list)[locales_list == r$locale])),
       lines
     )
