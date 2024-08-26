@@ -312,7 +312,7 @@ server <- function(input, output, session) {
             month      = format(Sys.Date(), "%m"),
             day        = format(Sys.Date(), "%d"),
             created_d2 = created_d2,
-            pretext    = paste0('I was observed on this date ', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
+            pretext    = paste0('I was observed on this date', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
           )
         }, error = function(e2) {
           print(e2)
@@ -337,7 +337,7 @@ server <- function(input, output, session) {
               )
             }, error = function(e4) {
               print(e4)
-              r$error <- 'No observations match all inputs; try again'
+              r$notices <- c(r$notices, 'No observations match all inputs; try again')
               reset_game()
             })
           })
@@ -370,7 +370,7 @@ server <- function(input, output, session) {
     if(r$difficulty > max_difficulty) { 
       
       r$difficulty <- max_difficulty
-      r$error <- paste0('Difficulty scaled down due to low number of species that match query')
+      r$notices <- c(r$notices, 'Difficulty scaled down due to low number of species that match query')
       
       # Get the last page, since first attempt would have returned nothing
       sc <- get_sc(
@@ -485,14 +485,14 @@ server <- function(input, output, session) {
       tagList(
         h3("Set up!"),
         HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
-        textInput('place',      div(h3('Enter a place name'),      HTML("<p>or leave it blank</p>")), value = r$placename,   width = '100%'),
-        textInput('taxon',      div(h3('Enter a taxonomic group'), HTML("<p>or leave it blank</p>")), value = r$input_taxon, width = '100%'),
-        textInput('user_login', div(h3('Enter a user login name'), HTML("<p>or leave it blank</p>")), value = r$user_login,  width = '100%'),
-        numericInput('difficulty', div(h3('Enter a difficulty level'), HTML("<p>larger numbers = less common genera</p>")), value = r$difficulty, min = 0, step = 1, width = '100%'),
-        selectInput("locale", h3('Enter the language of your common name hint'), names(locales_list), names(locales_list)[locales_list == r$locale], width = '100%'),
+        textInput('place',      div(h3('Enter a place name'),      HTML("<p>or leave it blank</p>")), value = isolate(r$placename),   width = '100%'),
+        textInput('taxon',      div(h3('Enter a taxonomic group'), HTML("<p>or leave it blank</p>")), value = isolate(r$input_taxon), width = '100%'),
+        textInput('user_login', div(h3('Enter a user login name'), HTML("<p>or leave it blank</p>")), value = isolate(r$user_login),  width = '100%'),
+        numericInput('difficulty', div(h3('Enter a difficulty level'), HTML("<p>larger numbers = less common genera</p>")), value = isolate(r$difficulty), min = 0, step = 1, width = '100%'),
+        selectInput("locale", h3('Enter the language of your common name hint'), names(locales_list), names(locales_list)[locales_list == isolate(r$locale)], width = '100%'),
         actionButton('submit', 'Random genus'),
         actionButton('daily_stable', "Today's genus", inline = TRUE),
-        uiOutput('error_ui')
+        uiOutput('notice_ui')
       )
     } else {
       tagList(
@@ -518,8 +518,8 @@ server <- function(input, output, session) {
     r$submitted <- TRUE
   })
   
-   output$error_ui <- renderUI({
-    HTML(paste0('<p style="margin-top: 10px">', r$error, '</p>'))
+  output$notice_ui <- renderUI({
+    HTML(paste0('<p style="margin-top: 10px">', paste(r$notices, collapse='. '), '</p>'))
   })
   
   observeEvent(r$submitted, {
@@ -529,21 +529,22 @@ server <- function(input, output, session) {
       r$user_login <- input$user_login
       r$difficulty <- input$difficulty
       r$locale <- locales_list[[input$locale]]
-      r$error <- ""
+      r$notices <- 'Loading...'
           
       # iNaturalist ID number for a taxon specified by the user
       if(r$input_taxon == '') {
         taxid <-  NULL
       } else {
-        tryCatch({
-          taxid <- get_tax(r$input_taxon)$id
-        }, error = \(e) taxid <- NA)
+        taxid <- tryCatch({
+          get_tax(r$input_taxon)$id
+        }, error = \(e) NA)
       }
       
       if(!anyNA(taxid)) {
+        r$notices <- ''
         try_place(r$placename, placelevels[[r$current_placelevel]], taxid)
       } else {
-        r$error <- 'Input taxon is not recognized'
+        r$notices <- 'Input taxon is not recognized'
         reset_game()
       }
     }
@@ -588,7 +589,7 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$new_game, {
-    r$error <- ''
+    r$notices <- ''
     reset_game()
   })
 
