@@ -15,12 +15,7 @@ locales_list <- setNames(names(simplei18n), simplei18n)
 ui <- fluidPage(
   
   theme = bs_theme(version = 4),
-  tags$style(type='text/css', "#showimage { margin: 5px; }"),
-  tags$style(type='text/css', "#hideimage { margin: 5px; }"),
-  tags$style(type='text/css', "#showcommon { margin: 5px; }"),
-  tags$style(type='text/css', "#hidecommon { margin: 5px; }"),
-  tags$style(type='text/css', "#difficulty { text-align: center; }"),
-  
+
   title = "iNatle: Local Genera",
 
   # Link to external CSS file
@@ -29,8 +24,14 @@ ui <- fluidPage(
   ),
 
   div(
+    class = 'setup',
+    uiOutput('setup_ui'),
+    uiOutput('notices_ui')
+  ),
+  
+  div(
     class = "guesses",
-    uiOutput('allout')
+    uiOutput('game_ui')
   ),
 
   # Link to external JS file
@@ -60,20 +61,27 @@ get_tax <- function(taxon_name = NULL, genus = FALSE, taxon_id = NULL, locale = 
   
 }
 
-# Get species counts
-get_sc <- function(taxon_id   = NULL, 
-                   year       = NULL, 
-                   month      = NULL, 
-                   day        = NULL, 
-                   bounds     = NULL, 
-                   user_login = NULL, 
-                   locale     = NULL,
-                   created_d2 = NULL,
-                   page       = 1,
-                   per_page   = 200) {
+# Get species counts or a specific observation
+get_observations <- function(taxon_id   = NULL, 
+                             year       = NULL, 
+                             month      = NULL, 
+                             day        = NULL, 
+                             bounds     = NULL, 
+                             user_login = NULL, 
+                             locale     = NULL,
+                             created_d2 = NULL,
+                             counts     = FALSE,
+                             page       = 1,
+                             per_page   = 1,
+                             id         = NULL) {
   
     # Base URL
-    base_url <- "https://api.inaturalist.org/v1/observations/species_counts/?"
+    base_url <- "https://api.inaturalist.org/v1/observations/"
+    if(counts) {
+      base_url <- paste0(base_url, "species_counts/?")
+    } else {
+      base_url <- paste0(base_url, "?")
+    }
 
     # Construct the query parameters
     params <- list(verifiable = 'true',
@@ -105,6 +113,7 @@ get_sc <- function(taxon_id   = NULL,
       params$nelng <- bounds[4]
     }
     if(!is.null(user_login)) params$user_login <- user_login
+    if(!is.null(id)) params$id <- id
 
     # Create URL with query parameters
     query <- paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&")
@@ -119,9 +128,7 @@ get_sc <- function(taxon_id   = NULL,
 }
 
 # Choose the word of the day
-choose_taxon <- function(obj, seed) {
-  
-  set.seed(seed)
+choose_taxon <- function(obj) {
 
   sp_counts <- sapply(obj$results, \(x) x$count)
   species <- sapply(obj$results, \(x) x$taxon$name)
@@ -132,62 +139,6 @@ choose_taxon <- function(obj, seed) {
   target_genus <- sample(names(gen_counts), 1)
 
   return(target_genus)
-  
-}
-
-# Choose a specific observation to represent the word of the day
-get_observation <- function(taxon_id   = NULL, 
-                            year       = NULL, 
-                            month      = NULL, 
-                            day        = NULL, 
-                            bounds     = NULL, 
-                            user_login = NULL, 
-                            locale     = NULL,
-                            created_d2 = NULL) {
-  
-    # Base URL
-    base_url <- "https://api.inaturalist.org/v1/observations/?"
-
-    # Construct the query parameters
-    params <- list(verifiable = 'true',
-                   photos     = 'true',
-                   hrank      = 'genus',
-                   locale     = locale,
-                   created_d2 = created_d2,
-                   per_page   = 1,
-                   page       = 1)
-
-    if(!is.null(taxon_id)) params$taxon_id <- taxon_id
-    if(!is.null(year)) params$year <- year
-    if(!is.null(month)) {
-      month <- as.numeric(month)
-      if(month < 1 || month > 12) stop("Month must be between 1 and 12.")
-      params$month <- month
-    }
-    if(!is.null(day)) {
-      day <- as.numeric(day)
-      if(day < 1 || day > 31) stop("Day must be between 1 and 31.")
-      params$day <- day
-    }
-    if(!is.null(bounds)) {
-      if(length(bounds) != 4) stop("Bounds must have 4 coordinates.")
-      bounds <- unname(bounds)
-      params$swlat <- bounds[1]
-      params$swlng <- bounds[2]
-      params$nelat <- bounds[3]
-      params$nelng <- bounds[4]
-    }
-    if(!is.null(user_login)) params$user_login <- user_login
-
-    # Create URL with query parameters
-    query <- paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&")
-    full_url <- paste0(base_url, query)
-
-    response <- readLines(url(full_url), warn = FALSE)
-    json_response <- paste(response, collapse = "")
-    obj <- fromJSON(json_response, simplifyVector=FALSE)
-
-    return(obj)
   
 }
 
@@ -235,20 +186,21 @@ censor_hints <- function(target, hint) {
 server <- function(input, output, session) {
   
   # Reactive Values Initialization
-  r <- reactiveValues(submitted    = FALSE,
+  r <- reactiveValues(is_random    = TRUE,
                       per_page     = 200,
                       difficulty   = 1,
                       placename    = 'Oregon',
                       input_taxon  = 'Plantae',
                       user_login   = '',
                       locale       = 'en',
+                      ready        = FALSE,
                       started      = FALSE,
-                      current_seed = NULL,
                       target_word  = character(0),
                       ref_obs      = NULL,
                       tax_info     = NULL,
+                      pretext      = NULL,
                       all_guesses  = list(),
-                      error        = '',
+                      notices      = '',
                       finished     = FALSE,
                       showimage    = FALSE,
                       showcommon   = FALSE,
@@ -292,52 +244,52 @@ server <- function(input, output, session) {
       user_login <- if(input$user_login == '') NULL else input$user_login
 
       tryCatch({
-        assemble_game(
+        get_random_obs(
           taxid      = taxid,
           user_login = user_login,
           bounds     = bounds,
           year       = format(Sys.Date() - 1, "%Y"),
           month      = format(Sys.Date() - 1, "%m"),
           day        = format(Sys.Date() - 1, "%d"),
-          created_d2 = created_d2,
-          pretext    = paste0('I was observed yesterday', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
+          created_d2 = created_d2
         )
+        r$pretext <- paste0('I was observed yesterday', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
       }, error = function(e1) {
         print(e1)
         tryCatch({
-          assemble_game(
+          get_random_obs(
             taxid      = taxid,
             user_login = user_login,
             bounds     = bounds,
             month      = format(Sys.Date(), "%m"),
             day        = format(Sys.Date(), "%d"),
-            created_d2 = created_d2,
-            pretext    = paste0('I was observed on this date', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
+            created_d2 = created_d2
           )
+          r$pretext <- paste0('I was observed on this date', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
         }, error = function(e2) {
           print(e2)
           tryCatch({
-            assemble_game(
+            get_random_obs(
               taxid      = taxid,
               user_login = user_login,
               bounds     = bounds,
               month      = format(Sys.Date(), "%m"),
-              created_d2 = created_d2,
-              pretext    = paste0('I was observed in this month of the year', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
+              created_d2 = created_d2
             )
+            r$pretext <- paste0('I was observed in this month of the year', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
           }, error = function(e3) {
             print(e3)
             tryCatch({
-              assemble_game(
+              get_random_obs(
                 taxid      = taxid,
                 user_login = user_login,
                 bounds     = bounds,
-                created_d2 = created_d2,
-                pretext    = paste0('I was observed at some time in the past', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
+                created_d2 = created_d2
               )
+              r$pretext <- paste0('I was observed at some time in the past', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
             }, error = function(e4) {
               print(e4)
-              r$notices <- c(r$notices, 'No observations match all inputs; try again')
+              r$notices <- 'No observations match all inputs; try again'
               reset_game()
             })
           })
@@ -346,11 +298,26 @@ server <- function(input, output, session) {
 
     }
   }
+  
+  get_specific_obs <- function(obs_id = NULL) {
+    
+    r$pretext <- '' # maybe should add info about time location drawn from observation instead of user inputs
+    
+    # Today's observation
+    r$ref_obs <- get_observations(id = obs_id, locale = r$locale)
+    
+    # Today's target genus
+    r$target_word <- tolower(strsplit(r$ref_obs$results[[1]]$taxon$name, ' ')[[1]][[1]])
+    
+    # Taxonomy info for today's target genus
+    r$tax_info <- get_tax(r$target_word, TRUE, locale = r$locale)
 
-  assemble_game <- function(taxid = NULL, user_login = NULL, bounds = NULL, year = NULL, month = NULL, day = NULL, created_d2 = NULL, pretext = NULL) {
+  }
+  
+  get_random_obs <- function(taxid = NULL, user_login = NULL, bounds = NULL, year = NULL, month = NULL, day = NULL, created_d2 = NULL) {
     
     # Observation counts fitting search criteria
-    sc <- get_sc(
+    sc <- get_observations(
       taxon_id   = taxid,
       user_login = user_login,
       bounds     = bounds,
@@ -359,6 +326,7 @@ server <- function(input, output, session) {
       day        = day,
       created_d2 = created_d2,
       locale     = r$locale,
+      counts     = TRUE,
       page       = r$difficulty,
       per_page   = r$per_page
     )
@@ -370,10 +338,10 @@ server <- function(input, output, session) {
     if(r$difficulty > max_difficulty) { 
       
       r$difficulty <- max_difficulty
-      r$notices <- c(r$notices, 'Difficulty scaled down due to low number of species that match query')
+      r$notices <- 'Difficulty scaled down due to low number of species that match query'
       
       # Get the last page, since first attempt would have returned nothing
-      sc <- get_sc(
+      sc <- get_observations(
         taxon_id   = taxid,
         user_login = user_login,
         bounds     = bounds,
@@ -382,6 +350,7 @@ server <- function(input, output, session) {
         day        = day,
         created_d2 = created_d2,
         locale     = r$locale,
+        counts     = TRUE,
         page       = r$difficulty,
         per_page   = r$per_page
       )
@@ -389,26 +358,30 @@ server <- function(input, output, session) {
     }
     
     # Today's target genus
-    r$target_word <- tolower(choose_taxon(sc, r$current_seed))
+    r$target_word <- tolower(choose_taxon(sc))
     
-    # Taxonomy infor for today's target genus
+    # Taxonomy info for today's target genus
     r$tax_info <- get_tax(r$target_word, TRUE, locale = r$locale)
     
     # Today's observation
-    r$ref_obs <- get_observation(taxon_id   = r$tax_info$id,
-                                 user_login = user_login,
-                                 bounds     = bounds,
-                                 year       = year,
-                                 month      = month,
-                                 day        = day,
-                                 created_d2 = created_d2,
-                                 locale     = r$locale)
+    r$ref_obs <- get_observations(taxon_id   = r$tax_info$id,
+                                  user_login = user_login,
+                                  bounds     = bounds,
+                                  year       = year,
+                                  month      = month,
+                                  day        = day,
+                                  created_d2 = created_d2,
+                                  locale     = r$locale)
 
+  }
+
+  assemble_game <- function() {
+    
     # Taxonomy info for today's observation
     obstax <- get_tax(taxon_id = r$ref_obs$results[[1]]$taxon$id, locale = r$locale)
     
     # Explanation of today's observation
-    output$pretext <- renderText({ paste0('<p style="margin-bottom: 10px">', pretext, '</p>') })
+    output$pretext <- renderText({ paste0('<p style="margin-bottom: 10px">', r$pretext, '</p>') })
 
     # HTML for image and link
     output$iurl <- renderText({
@@ -454,9 +427,9 @@ server <- function(input, output, session) {
     }
     
     censorednotice <- "<br>(Similarities to the target genus itself have been hidden)"
-    missingnotice <- paste0("<br>Did you know you could <a href=\"https://www.inaturalist.org/taxa/",
+    missingnotice <- paste0('<br>Did you know you could <a href="https://www.inaturalist.org/taxa/',
                              if(!'preferred_common_name' %in% names(obstax)) obstax$id else r$tax_info$id, 
-                            "\" target=\"_blank\">add</a> missing common names to iNaturalist?")
+                            '" target="_blank">add</a> missing common names to iNaturalist?')
     
     eithercensored <- attr(common_genus, 'censored') | attr(common_specific, 'censored')
     preferredmissing <- (!'preferred_common_name' %in% names(r$tax_info)) | (!'preferred_common_name' %in% names(obstax))
@@ -470,8 +443,8 @@ server <- function(input, output, session) {
   }
   
   reset_game <- function() {
-    r$submitted <- FALSE
-    r$current_seed <- NULL
+    r$ready <- FALSE
+    r$pretext <- NULL
     r$showimage <- FALSE
     r$showcommon <- FALSE
     r$all_guesses <- list()
@@ -480,74 +453,109 @@ server <- function(input, output, session) {
     r$started <- FALSE
   }
   
-  output$allout <- renderUI({
-    if(!r$started) {
-      tagList(
-        h3("Set up!"),
-        HTML("<p>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
-        textInput('place',      div(h3('Enter a place name'),      HTML("<p>or leave it blank</p>")), value = isolate(r$placename),   width = '100%'),
-        textInput('taxon',      div(h3('Enter a taxonomic group'), HTML("<p>or leave it blank</p>")), value = isolate(r$input_taxon), width = '100%'),
-        textInput('user_login', div(h3('Enter a user login name'), HTML("<p>or leave it blank</p>")), value = isolate(r$user_login),  width = '100%'),
-        numericInput('difficulty', div(h3('Enter a difficulty level'), HTML("<p>larger numbers = less common genera</p>")), value = isolate(r$difficulty), min = 0, step = 1, width = '100%'),
-        selectInput("locale", h3('Enter the language of your common name hint'), names(locales_list), names(locales_list)[locales_list == isolate(r$locale)], width = '100%'),
-        actionButton('submit', 'Random genus'),
-        actionButton('daily_stable', "Today's genus", inline = TRUE),
-        uiOutput('notice_ui')
-      )
-    } else {
-      tagList(
-        h3("What's my genus?"),
-        uiOutput("pretext"),
-        uiOutput("image_div"),
-        uiOutput("common_div"),
-        uiOutput("previous_guesses"),
-        uiOutput("current_guess"),
-        uiOutput("endgame"),
-        uiOutput("new_game_ui"),
-        uiOutput("keyboard")
-      )
-    }
+  output$setup_ui <- renderUI({
+    req(!r$started & !r$ready)
+    tagList(
+      h1('Setup'), 
+      hr(),
+      
+      fluidRow(
+       column(6, HTML("<b>Enter the language of your common name hint</b>")),
+       column(6, selectInput("locale", NULL, names(locales_list), names(locales_list)[locales_list == isolate(r$locale)], width = '100%'))
+      ),
+      hr(),
+      
+      HTML("<p><b>Enter an observation ID number</b><br>to accept someone's challenge</p>"),
+      fluidRow(
+        column(7, textInput('obs_id', NULL, value = '', width = '100%')),
+        column(5, actionButton('submit_specific', 'Accept Challenge!', style = 'white-space: nowrap;'))
+      ),
+      hr(),
+      
+      HTML("<p><b>Or, generate a random game</b><br>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
+      textInput('place',      HTML("<b>Enter a place name</b><br>or leave it blank"), value = isolate(r$placename),   width = '100%'),
+      textInput('taxon',      HTML("<b>Enter a taxonomic group</b><br>or leave it blank"), value = isolate(r$input_taxon), width = '100%'),
+      textInput('user_login', HTML("<b>Enter a user login name</b><br>or leave it blank"), value = isolate(r$user_login),  width = '100%'),
+      numericInput('difficulty', HTML("<b>Enter a difficulty level</b><br>larger numbers = less common genera"), value = isolate(r$difficulty), min = 0, step = 1, width = '100%'),
+      actionButton('submit_random', 'Random genus')
+    )
   })
   
-  observeEvent(input$daily_stable, {
-    r$current_seed <- format(Sys.Date(), '%Y%m%d')
-    r$submitted <- TRUE
+  observeEvent(input$submit_specific, {
+    
+    r$locale <- locales_list[[input$locale]]
+    r$notices <- 'Loading challenge...'
+    r$is_random <- FALSE
+    r$ready <- TRUE
+    
   })
   
-  observeEvent(input$submit, {
-    r$submitted <- TRUE
+  observeEvent(input$submit_random, {
+    
+    r$locale <- locales_list[[input$locale]]
+    r$notices <- 'Loading random genus...'
+    r$is_random <- TRUE
+    r$ready <- TRUE
+    
   })
   
-  output$notice_ui <- renderUI({
-    HTML(paste0('<p style="margin-top: 10px">', paste(r$notices, collapse='. '), '</p>'))
+  output$notices_ui <- renderText({
+    req(!r$started & r$ready)
+    HTML(paste0('<p style="margin-top: 10px">', r$notices, '</p>'))
   })
   
-  observeEvent(r$submitted, {
-    if(r$submitted) {
-      r$placename <- input$place
-      r$input_taxon <- input$taxon
-      r$user_login <- input$user_login
-      r$difficulty <- input$difficulty
-      r$locale <- locales_list[[input$locale]]
-      r$notices <- 'Loading...'
-          
-      # iNaturalist ID number for a taxon specified by the user
-      if(r$input_taxon == '') {
-        taxid <-  NULL
+  observeEvent(r$ready, {
+    
+    if(r$ready) {
+      
+      if(!r$is_random) {
+        
+        get_specific_obs(input$obs_id)
+        assemble_game()
+        
       } else {
-        taxid <- tryCatch({
-          get_tax(r$input_taxon)$id
-        }, error = \(e) NA)
+        
+        r$placename <- input$place
+        r$input_taxon <- input$taxon
+        r$user_login <- input$user_login
+        r$difficulty <- input$difficulty
+    
+        # iNaturalist ID number for a taxon specified by the user
+        if(r$input_taxon == '') {
+          taxid <-  NULL
+        } else {
+          taxid <- tryCatch({
+            get_tax(r$input_taxon)$id
+          }, error = \(e) NA)
+        }
+        
+        if(!anyNA(taxid)) {
+          try_place(r$placename, placelevels[[r$current_placelevel]], taxid)
+          assemble_game()
+        } else {
+          r$notices <- 'Input taxon is not recognized'
+          reset_game()
+        }
+        
       }
       
-      if(!anyNA(taxid)) {
-        r$notices <- ''
-        try_place(r$placename, placelevels[[r$current_placelevel]], taxid)
-      } else {
-        r$notices <- 'Input taxon is not recognized'
-        reset_game()
-      }
     }
+    
+  })
+  
+  output$game_ui <- renderUI({
+    req(r$started)
+    tagList(
+      h3("What's my genus?"),
+      uiOutput("pretext"),
+      uiOutput("image_div"),
+      uiOutput("common_div"),
+      uiOutput("previous_guesses"),
+      uiOutput("current_guess"),
+      uiOutput("endgame"),
+      uiOutput("new_game_ui"),
+      uiOutput("keyboard")
+    )
   })
   
   observeEvent(input$showimage, {
@@ -562,10 +570,10 @@ server <- function(input, output, session) {
     if(r$showimage) {
       list(
         htmlOutput('iurl'),
-        actionButton('hideimage', 'Hide image')
+        actionButton('hideimage', 'Hide image', style = "margin: 5px;")
       )
     } else {
-      actionButton('showimage', 'Show image')
+      actionButton('showimage', 'Show image', style = "margin: 5px;")
     }
   })
   
@@ -581,10 +589,10 @@ server <- function(input, output, session) {
     if(r$showcommon) {
       list(
         htmlOutput('common'),
-        actionButton('hidecommon', 'Hide common name')
+        actionButton('hidecommon', 'Hide common name', style = "margin: 5px;")
       )
     } else {
-      actionButton('showcommon', 'Show common name')
+      actionButton('showcommon', 'Show common name', style = "margin: 5px;")
     }
   })
 
@@ -726,7 +734,11 @@ server <- function(input, output, session) {
 
       div(paste(line, collapse = ""))
     })
-    div(class = "endgame-content", lines)
+    div(class = "endgame-content", 
+      HTML(paste0('<a href="https://thecnidaegritty.org/iNatle/" target="_blank">iNatle</a> ID: ', r$ref_obs$results[[1]]$id,
+                  '<br>Hint language: ', names(locales_list)[locales_list == r$locale])),
+      lines
+    )
   }
 
   output$endgame <- renderUI({
