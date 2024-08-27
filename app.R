@@ -742,7 +742,8 @@ server <- function(input, output, session) {
       div(paste(line, collapse = ""))
     })
     div(class = "endgame-content", 
-      HTML(paste0('<a href="https://thecnidaegritty.org/iNatle/" target="_blank">iNatle</a> ID: ', r$ref_obs$results[[1]]$id,
+      HTML(paste0('iNatle ID: ', r$ref_obs$results[[1]]$id,
+                  '<br>https://thecnidaegritty.org/iNatle/',
                   '<br>Place: ', r$placename,
                   '<br>Taxon: ', r$input_taxon,
                   '<br>Hint language: ', names(locales_list)[locales_list == r$locale])),
