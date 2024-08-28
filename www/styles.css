@@ -3,7 +3,7 @@
 .container-fluid {
     text-align: center;
     vertical-align: top;
-    height: calc(100% - 30px);
+    height: 100%;
     display: grid;
     grid-template-rows: 1fr auto;
     width: fit-content;
@@ -57,7 +57,8 @@
     border: 1px solid black;
 }
 .keyboard {
-    height: 240px;
+    height: 100%;
+    margin: 10px;
     user-select: none;
 }
 .keyboard .keyboard-row {

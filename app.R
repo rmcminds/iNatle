@@ -16,8 +16,6 @@ ui <- fluidPage(
   
   theme = bs_theme(version = 4),
 
-  title = "iNatle: Local Genera",
-
   # Link to external CSS file
   tags$head(
     includeCSS("www/styles.css")
@@ -578,7 +576,8 @@ server <- function(input, output, session) {
   output$game_ui <- renderUI({
     req(r$started)
     tagList(
-      h3("What's my genus?"),
+      h3("iNatle"),
+      h4("What's my genus?"),
       uiOutput("pretext"),
       uiOutput("image_div"),
       uiOutput("common_div"),
