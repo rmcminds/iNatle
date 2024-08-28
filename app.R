@@ -212,7 +212,7 @@ server <- function(input, output, session) {
     query <- parseQueryString(session$clientData$url_search)
     isolate({
       if('locale' %in% names(query)) r$locale <- query[['locale']]
-      if('ref_obs' %in% names(query)) r$ref_obs <- query[['ref_obs']]
+      if('obs_id' %in% names(query)) updateTextInput(session, 'obs_id', value = query[['obs_id']])
       if('placename' %in% names(query)) r$placename <- query[['placename']]
       if('input_taxon' %in% names(query)) r$input_taxon <- query[['input_taxon']]
       if('user_login' %in% names(query)) r$user_login <- query[['user_login']]
@@ -786,7 +786,7 @@ server <- function(input, output, session) {
                   if(r$user_login != '')  '<br>User: ' else NULL,  r$user_login,
                   '<br>Hint language: ', names(locales_list)[locales_list == r$locale], '<br>')),
       lines,
-      HTML(paste0('<br>https://thecnidaegritty.org/iNatle/?ref_obs=', r$ref_obs$results[[1]]$id))
+      HTML(paste0('<br>https://thecnidaegritty.org/iNatle/?obs_id=', r$ref_obs$results[[1]]$id))
     )
   }
 
