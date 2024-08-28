@@ -189,7 +189,7 @@ server <- function(input, output, session) {
   # Reactive Values Initialization
   r <- reactiveValues(is_random    = TRUE,
                       per_page     = 200,
-                      rarity   = 1,
+                      rarity       = 1,
                       maxchar      = 10,
                       placename    = 'Oregon',
                       input_taxon  = 'Plantae',
@@ -306,13 +306,19 @@ server <- function(input, output, session) {
     r$pretext <- '' # maybe should add info about time location drawn from observation instead of user inputs
     
     # Today's observation
-    r$ref_obs <- get_observations(id = obs_id, locale = r$locale)
+    r$ref_obs <- tryCatch({
+      get_observations(id = obs_id, locale = r$locale)
+    }, error = \(e) NA)
     
-    # Today's target genus
-    r$target_word <- tolower(strsplit(r$ref_obs$results[[1]]$taxon$name, ' ')[[1]][[1]])
-    
-    # Taxonomy info for today's target genus
-    r$tax_info <- get_tax(r$target_word, TRUE, locale = r$locale)
+    if(!anyNA(r$ref_obs)) {
+      
+      # Today's target genus
+      r$target_word <- tolower(strsplit(r$ref_obs$results[[1]]$taxon$name, ' ')[[1]][[1]])
+      
+      # Taxonomy info for today's target genus
+      r$tax_info <- get_tax(r$target_word, TRUE, locale = r$locale)
+      
+    }
 
   }
   
@@ -458,7 +464,7 @@ server <- function(input, output, session) {
   output$setup_ui <- renderUI({
     req(!r$started & !r$ready)
     tagList(
-      h1('Setup'), 
+      h1('iNatle Setup'), 
       hr(),
       
       fluidRow(
@@ -506,7 +512,7 @@ server <- function(input, output, session) {
   })
   
   output$notices_ui <- renderText({
-    req(!r$started & r$ready)
+    req(!r$started)
     HTML(paste0('<p style="margin-top: 10px">', r$notices, '</p>'))
   })
   
@@ -516,8 +522,27 @@ server <- function(input, output, session) {
       
       if(!r$is_random) {
         
-        get_specific_obs(input$obs_id)
-        assemble_game()
+        if(input$obs_id != '') {
+        
+          get_specific_obs(input$obs_id)
+          
+          if(anyNA(r$ref_obs)) {
+      
+            r$notices <- 'ID number does not appear to be valid'
+            reset_game()
+            
+          } else {
+            
+            assemble_game()
+            
+          }
+        
+        } else {
+          
+          r$notices <- 'Please enter an ID number'
+          reset_game()
+          
+        }
         
       } else {
         
@@ -794,5 +819,5 @@ check_word <- function(guess_str, target_str) {
 
 shinyApp(ui, server)
 
-#shinylive::export('~/scripts/iNatle/', '~/scripts/thecnidaegritty/iNatle/', template_params=list(title='iNatle'))
+#shinylive::export('~/scripts/iNatle/', '~/scripts/thecnidaegritty/iNatle/', template_dir = "~/scripts/thecnidaegritty/scripts/shinylive_jekyll_template", template_params = list(title = 'iNatle', permalink = '/iNatle/'))
 #httpuv::runStaticServer("~/scripts/thecnidaegritty/iNatle/")
