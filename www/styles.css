@@ -7,7 +7,6 @@
     display: grid;
     grid-template-rows: 1fr auto;
     width: fit-content;
-    max-width: 100vh;
 }
 
 .shiny-input-text {

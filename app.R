@@ -204,12 +204,24 @@ server <- function(input, output, session) {
                       finished     = FALSE,
                       showimage    = FALSE,
                       showcommon   = FALSE,
-                      current_guess_letters = character(0),
-                      current_placelevel    = 1)
+                      current_guess_letters = character(0))
+  
+  observe({
+    
+    # If a link was used that has parameters, load them
+    query <- parseQueryString(session$clientData$url_search)
+    isolate({
+      if('locale' %in% names(query)) r$locale <- query[['locale']]
+      if('ref_obs' %in% names(query)) r$ref_obs <- query[['ref_obs']]
+      if('placename' %in% names(query)) r$placename <- query[['placename']]
+      if('input_taxon' %in% names(query)) r$input_taxon <- query[['input_taxon']]
+      if('user_login' %in% names(query)) r$user_login <- query[['user_login']]
+    })
+    reset_game()
+  
+  })
 
-  placelevels <- c('continent', 'region', 'country', 'settlement')
-
-  try_place <- function(placename, placelevel, taxid) {
+  try_place <- function(placename, taxid) {
     
     if(placename == '') {
       
@@ -219,7 +231,7 @@ server <- function(input, output, session) {
     } else {
   
       base_url <- "https://nominatim.openstreetmap.org/search"
-      query <- paste0("?q=", URLencode(placename), "&format=json&featuretype=", tolower(placelevel))
+      query <- paste0("?q=", URLencode(placename), "&format=json")
       full_url <- paste0(base_url, query)
   
       response <- readLines(url(full_url), warn = FALSE)
@@ -236,8 +248,8 @@ server <- function(input, output, session) {
 
     if(any(is.na(bounds))) {
 
-      r$current_placelevel <- r$current_placelevel + 1
-      try_place(placename, placelevels[[r$current_placelevel]], taxid)
+      r$notices <- 'Place name not found'
+      reset_game()
 
     } else {
       
@@ -391,7 +403,7 @@ server <- function(input, output, session) {
 
     # HTML for image and link
     output$iurl <- renderText({
-      c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url), '/', sub('square', 'medium', basename(r$ref_obs$results[[1]]$photos[[1]]$url))), '"></a>')
+      c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url), '/', sub('square', 'medium', basename(r$ref_obs$results[[1]]$photos[[1]]$url))), '" style="max-width: 100%;"></a>')
     })
 
     # Contsruct common genus name hint
@@ -454,7 +466,6 @@ server <- function(input, output, session) {
     r$showimage <- FALSE
     r$showcommon <- FALSE
     r$all_guesses <- list()
-    r$current_placelevel <- 1
     r$finished <- FALSE
     r$started <- FALSE
   }
@@ -493,6 +504,9 @@ server <- function(input, output, session) {
   
   observeEvent(input$submit_specific, {
     
+    r$placename <- ''
+    r$input_taxon <- ''
+    r$user_login <- ''
     r$locale <- locales_list[[input$locale]]
     r$notices <- 'Loading challenge...'
     r$is_random <- FALSE
@@ -560,7 +574,7 @@ server <- function(input, output, session) {
         }
         
         if(!anyNA(taxid)) {
-          try_place(r$placename, placelevels[[r$current_placelevel]], taxid)
+          try_place(r$placename, taxid)
           assemble_game()
         } else {
           r$notices <- 'Input taxon is not recognized'
@@ -767,11 +781,12 @@ server <- function(input, output, session) {
     })
     div(class = "endgame-content", 
       HTML(paste0('iNatle ID: ', r$ref_obs$results[[1]]$id,
-                  '<br>https://thecnidaegritty.org/iNatle/',
-                  '<br>Place: ', r$placename,
-                  '<br>Taxon: ', r$input_taxon,
-                  '<br>Hint language: ', names(locales_list)[locales_list == r$locale])),
-      lines
+                  if(r$placename != '')   '<br>Place: ' else NULL, r$placename,
+                  if(r$input_taxon != '') '<br>Taxon: ' else NULL, r$input_taxon,
+                  if(r$user_login != '')  '<br>User: ' else NULL,  r$user_login,
+                  '<br>Hint language: ', names(locales_list)[locales_list == r$locale], '<br>')),
+      lines,
+      HTML(paste0('<br>https://thecnidaegritty.org/iNatle/?ref_obs=', r$ref_obs$results[[1]]$id))
     )
   }
 
@@ -818,5 +833,8 @@ check_word <- function(guess_str, target_str) {
 
 shinyApp(ui, server)
 
-#shinylive::export('~/scripts/iNatle/', '~/scripts/thecnidaegritty/iNatle/', template_dir = "~/scripts/thecnidaegritty/scripts/shinylive_jekyll_template", template_params = list(title = 'iNatle', permalink = '/iNatle/'))
-#httpuv::runStaticServer("~/scripts/thecnidaegritty/iNatle/")
+# Use my custom shinylive template to make sure there's jekyll frontmatter on the export
+# Then make simple update to shinylive.js so the url parameters are forwarded to the iframe (sed command specific to macos)
+# shinylive::export('~/scripts/iNatle/', '~/scripts/thecnidaegritty/iNatle/', template_dir = "~/scripts/thecnidaegritty/scripts/shinylive_jekyll_template", template_params = list(title = 'iNatle', permalink = '/iNatle/'))
+# system("sed -i '' 's/viewerFrameRef.current.src = appInfo.urlPath/viewerFrameRef.current.src = appInfo.urlPath + window.location.search;/g' ~/scripts/thecnidaegritty/iNatle/shinylive/shinylive.js")
+# httpuv::runStaticServer("~/scripts/thecnidaegritty/iNatle/")
