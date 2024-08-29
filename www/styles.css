@@ -17,11 +17,6 @@
     text-align: center;
 }
 
-.guesses {
-    height: 100%;
-    width: fit-content;
-}
-
 .guesses .word {
     margin: 5px;
     white-space: nowrap;

@@ -3,7 +3,6 @@ library(htmltools)
 library(bslib)
 library(jsonlite)
 library(i18n)
-library(stringr)
 library(stringi)
 
 # Create list of language options
@@ -21,15 +20,17 @@ ui <- fluidPage(
     includeCSS("www/styles.css")
   ),
 
-  div(
-    class = 'setup',
-    uiOutput('setup_ui'),
-    uiOutput('notices_ui')
-  ),
-  
-  div(
-    class = "guesses",
-    uiOutput('game_ui')
+  div(id = 'mycontainer', 
+    div(
+      class = 'setup',
+      uiOutput('setup_ui'),
+      uiOutput('notices_ui')
+    ),
+    
+    div(
+      class = "guesses",
+      uiOutput('game_ui')
+    )
   ),
 
   # Link to external JS file
@@ -145,7 +146,7 @@ choose_taxon <- function(obj, maxchar = 100) {
 censor_hints <- function(target, hint) {
   
   target_length <- nchar(target)
-  target_segments <- sapply(1:(target_length-4), \(i) substr(stri_trans_general(tolower(target), "Latin-ASCII"), i, i+4))
+  target_segments <- sapply(1:(target_length-4), \(i) substr(stringi::stri_trans_general(tolower(target), "Latin-ASCII"), i, i+4))
   
   pattern <- paste(sapply(target_segments, \(x) sapply(1:5, \(y) paste0(substr(x, 1, y-1), '.?', substr(x, y+1, nchar(x))))), collapse='|')
   
@@ -153,7 +154,7 @@ censor_hints <- function(target, hint) {
   pattern <- paste0('(?=(', pattern, '))')
   
   # Find matches in the original string, using normalized version
-  matches <- gregexpr(pattern, stri_trans_general(tolower(hint), "Latin-ASCII"), perl = TRUE)
+  matches <- gregexpr(pattern, stringi::stri_trans_general(tolower(hint), "Latin-ASCII"), perl = TRUE)
   
   # Get positions of matches
   match_positions <- unlist(matches)
@@ -835,6 +836,6 @@ shinyApp(ui, server)
 
 # Use my custom shinylive template to make sure there's jekyll frontmatter on the export
 # Then make simple update to shinylive.js so the url parameters are forwarded to the iframe (sed command specific to macos)
-# shinylive::export('~/scripts/iNatle/', '~/scripts/thecnidaegritty/iNatle/', template_dir = "~/scripts/thecnidaegritty/scripts/shinylive_jekyll_template", template_params = list(title = 'iNatle', permalink = '/iNatle/'))
-# system("sed -i '' 's/viewerFrameRef.current.src = appInfo.urlPath/viewerFrameRef.current.src = appInfo.urlPath + window.location.search;/g' ~/scripts/thecnidaegritty/iNatle/shinylive/shinylive.js")
-# httpuv::runStaticServer("~/scripts/thecnidaegritty/iNatle/")
+# shinylive::export('~/scripts/iNatle/', '~/scripts/thecnidaegritty/iNatle_raw/', template_dir = "~/scripts/thecnidaegritty/scripts/shinylive_embedded_jekyll_template", template_params = list(title = 'iNatle'))
+# system("sed -i '' 's/viewerFrameRef.current.src = appInfo.urlPath/viewerFrameRef.current.src = appInfo.urlPath + window.location.search;/g' ~/scripts/thecnidaegritty/iNatle_raw/shinylive/shinylive.js")
+# httpuv::runStaticServer("~/scripts/thecnidaegritty/iNatle_raw/")
