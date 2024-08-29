@@ -1,5 +1,32 @@
 // custom.js
 
+function updateLetterWidth() {
+  const gameuidoc = document.getElementById('game_ui');
+  const guessword = document.getElementById('current_guess');
+  const previousword = document.getElementById('previous_guesses');
+  
+  if (gameuidoc && guessword) {
+    const guesswordHeight = Math.max(previousword.firstChild.offsetHeight, guessword.firstChild.offsetHeight);
+    gameuidoc.style.setProperty('--guessword-height', `${guesswordHeight}px`);
+  }
+}
+
+// Create a MutationObserver to watch for changes in the parent
+const observer = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    if (mutation.addedNodes.length) {
+      updateLetterWidth(); // Call when the target div is added
+    }
+  });
+});
+
+// Start observing the parent element for child node additions
+const mycontainer = document.getElementById('mycontainer');
+observer.observe(mycontainer, { childList: true, subtree: true });
+
+// Update on window resize
+window.addEventListener('resize', updateLetterWidth);
+
 const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const all_key_ids = [...letters, 'Enter', 'Back'];
 

@@ -18,41 +18,56 @@
 }
 
 .guesses .word {
-    margin: 5px;
+    display: flex;
     white-space: nowrap;
     text-align: center;
+    width: 330px;
+    max-width: 330px;
+    min-width: 330px; /* based on width of fixed size keyboard div */
+    margin: auto;
+    justify-content: center;
 }
-.guesses .word > .letter {
-    display: inline-block;
-    width: 50px;
-    height: 50px;
+.guesses .word .lettercontainer {
+    flex: 1;
+    max-width: 50px; /* nice size for even big screen */
+    aspect-ratio: 1;
     text-align: center;
     vertical-align: middle;
-    border-radius: 3px;
-    line-height: 50px;
-    font-size: 32px;
+}
+.guesses .word .lettercontainer > .letter {
+    margin: 10%;
+    width: 90%;
+    height: 90%;
+    text-align: center;
+    vertical-align: middle;
+    border-radius: 10%;
+    line-height: 111.11%; /* relative to width of parent container; has to 'undo' the 90% */
+    font-size: calc(0.64 * var(--guessword-height)); /* interacts with custom.js function */
     font-weight: bold;
     user-select: none;
     color: white;
     font-family: 'Clear Sans', 'Helvetica Neue', Arial, sans-serif;
 }
-.guesses .word > .correct {
+.guesses .word .lettercontainer > .correct {
     background-color: #6a5;
+    border: 1px solid #6a5;
 }
-.guesses .word > .in-word {
+.guesses .word .lettercontainer > .in-word {
     background-color: #db5;
+    border: 1px solid #db5;
 }
-.guesses .word > .not-in-word {
+.guesses .word .lettercontainer > .not-in-word {
     background-color: #888;
+    border: 1px solid #888;
 }
-.guesses .word > .guess {
+.guesses .word .lettercontainer > .guess {
     color: black;
     background-color: white;
     border: 1px solid black;
 }
 .keyboard {
     height: 100%;
-    margin: 10px;
+    margin: 10px 0px;
     user-select: none;
 }
 .keyboard .keyboard-row {
@@ -62,12 +77,12 @@
 .keyboard .keyboard-row .key {
     display: inline-block;
     padding: 0;
-    width: 30px;
-    height: 50px;
+    width: 28px;
+    height: 40px;
     text-align: center;
     vertical-align: middle;
     border-radius: 3px;
-    line-height: 50px;
+    line-height: 40px;
     font-size: 18px;
     font-weight: bold;
     color: black;
@@ -99,8 +114,11 @@
     display: inline-block;
     line-height: 1.4;
     letter-spacing: .2em;
-    margin: 20px 8px;
-    width: fit-content;
+    margin: 20px 0px;
+    width: 330px;
+    max-width: 330px;
+    min-width: 330px; /* based on width of fixed size keyboard div */
+    overflow-wrap: break-word;
     padding: 20px;
     border-radius: 5px;
     box-shadow: 4px 4px 19px rgb(0 0 0 / 17%);

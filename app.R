@@ -404,7 +404,7 @@ server <- function(input, output, session) {
 
     # HTML for image and link
     output$iurl <- renderText({
-      c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url), '/', sub('square', 'medium', basename(r$ref_obs$results[[1]]$photos[[1]]$url))), '" style="max-width: 100%;"></a>')
+      c('<a href="', r$ref_obs$results[[1]]$uri, '" target="_blank"><img src="', paste0(dirname(r$ref_obs$results[[1]]$photos[[1]]$url), '/', sub('square', 'medium', basename(r$ref_obs$results[[1]]$photos[[1]]$url))), '" style="width: 330px; max-width: 330px; min-width: 330px;"></a>') # min-width based on keyboard size
     })
 
     # Contsruct common genus name hint
@@ -653,7 +653,11 @@ server <- function(input, output, session) {
       letters <- guess$letters
       row <- mapply(letters, guess$matches, SIMPLIFY = FALSE, USE.NAMES = FALSE, FUN = function(letter, match) {
         match_type <- match
-        div(toupper(letter), class = paste("letter", match_type))
+        div(
+          div(toupper(letter), 
+              class = paste("letter", match_type)
+          ),
+        class = 'lettercontainer')
       })
       div(class = "word", row)
     })
@@ -675,7 +679,10 @@ server <- function(input, output, session) {
     div(
       class = "word",
       lapply(letters, function(letter) {
-        div(toupper(letter), class = "letter guess")
+        div(
+          div(toupper(letter), 
+              class = "letter guess"),
+        class = 'lettercontainer')
       })
     )
   })
@@ -778,16 +785,16 @@ server <- function(input, output, session) {
         )
       }, character(1))
 
-      div(paste(line, collapse = ""))
+      paste(line, collapse = "")
     })
     div(class = "endgame-content", 
       HTML(paste0('iNatle ID: ', r$ref_obs$results[[1]]$id,
                   if(r$placename != '')   '<br>Place: ' else NULL, r$placename,
                   if(r$input_taxon != '') '<br>Taxon: ' else NULL, r$input_taxon,
                   if(r$user_login != '')  '<br>User: ' else NULL,  r$user_login,
-                  '<br>Hint language: ', names(locales_list)[locales_list == r$locale], '<br>')),
-      lines,
-      HTML(paste0('<br>https://thecnidaegritty.org/iNatle/?obs_id=', r$ref_obs$results[[1]]$id))
+                  '<br>Hint language: ', names(locales_list)[locales_list == r$locale], '<br><br>')),
+      HTML(paste(lines, collapse = '<br>')),
+      HTML(paste0('<br><br>https://thecnidaegritty.org/iNatle/?obs_id=', r$ref_obs$results[[1]]$id))
     )
   }
 
