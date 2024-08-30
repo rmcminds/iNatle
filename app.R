@@ -3,39 +3,24 @@ library(htmltools)
 library(bslib)
 library(jsonlite)
 library(i18n)
-library(stringi)
 
 # Create list of language options
 simplei18n <- grep('-', all_locales, invert = TRUE)
 simplei18n <- sapply(simplei18n, \(x) locale_names[x,2][[1]][all_locales[[x]]])
 locales_list <- setNames(names(simplei18n), simplei18n)
 
-# Create UI. Mostly a frame that is filled in by the server.
-ui <- fluidPage(
+# Convert accented text to generic ASCII
+normalize_string <- function(string) {
   
-  theme = bs_theme(version = 4),
-
-  # Link to external CSS file
-  tags$head(
-    includeCSS("www/styles.css")
-  ),
-
-  div(id = 'mycontainer', 
-    div(
-      class = 'setup',
-      uiOutput('setup_ui'),
-      uiOutput('notices_ui')
-    ),
-    
-    div(
-      class = "guesses",
-      uiOutput('game_ui')
-    )
-  ),
-
-  # Link to external JS file
-  includeScript("www/custom.js")
-)
+  # Convert to ASCII and transliterate
+  normalized_string <- iconv(string, from = "UTF-8", to = "ASCII//TRANSLIT")
+  
+  # Remove any remaining or introduced non-ASCII characters
+  normalized_string <- gsub("[^[:alnum:][:space:]]", "", normalized_string)
+  
+  return(normalized_string)
+  
+}
 
 # Get iNat tax info from an arbitrary string, genus, or ID number
 get_tax <- function(taxon_name = NULL, genus = FALSE, taxon_id = NULL, locale = NULL) {
@@ -146,7 +131,7 @@ choose_taxon <- function(obj, maxchar = 100) {
 censor_hints <- function(target, hint) {
   
   target_length <- nchar(target)
-  target_segments <- sapply(1:(target_length-4), \(i) substr(stringi::stri_trans_general(tolower(target), "Latin-ASCII"), i, i+4))
+  target_segments <- sapply(1:(target_length-4), \(i) substr(tolower(normalize_string(target)), i, i+4))
   
   pattern <- paste(sapply(target_segments, \(x) sapply(1:5, \(y) paste0(substr(x, 1, y-1), '.?', substr(x, y+1, nchar(x))))), collapse='|')
   
@@ -154,7 +139,7 @@ censor_hints <- function(target, hint) {
   pattern <- paste0('(?=(', pattern, '))')
   
   # Find matches in the original string, using normalized version
-  matches <- gregexpr(pattern, stringi::stri_trans_general(tolower(hint), "Latin-ASCII"), perl = TRUE)
+  matches <- gregexpr(pattern, tolower(normalize_string(hint)), perl = TRUE)
   
   # Get positions of matches
   match_positions <- unlist(matches)
@@ -182,6 +167,34 @@ censor_hints <- function(target, hint) {
   
 }
 
+
+# Create UI. Mostly a frame that is filled in by the server.
+ui <- fluidPage(
+  
+  theme = bs_theme(version = 4),
+
+  # Link to external CSS file
+  tags$head(
+    includeCSS("www/styles.css")
+  ),
+
+  div(id = 'mycontainer', 
+    div(
+      class = 'setup',
+      uiOutput('setup_ui'),
+      uiOutput('notices_ui')
+    ),
+    
+    div(
+      class = "guesses",
+      uiOutput('game_ui')
+    )
+  ),
+
+  # Link to external JS file
+  includeScript("www/custom.js")
+)
+
 # Do all the real work
 server <- function(input, output, session) {
   
@@ -190,8 +203,8 @@ server <- function(input, output, session) {
                       per_page     = 200,
                       rarity       = 1,
                       maxchar      = 10,
-                      placename    = 'Oregon',
-                      input_taxon  = 'Plantae',
+                      placename    = '',
+                      input_taxon  = '',
                       user_login   = '',
                       locale       = 'en',
                       ready        = FALSE,
@@ -643,6 +656,7 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$new_game, {
+    updateTextInput(session, 'obs_id', value = '')
     r$notices <- ''
     reset_game()
   })
