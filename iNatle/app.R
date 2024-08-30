@@ -9,11 +9,14 @@ simplei18n <- grep('-', all_locales, invert = TRUE)
 simplei18n <- sapply(simplei18n, \(x) locale_names[x,2][[1]][all_locales[[x]]])
 locales_list <- setNames(names(simplei18n), simplei18n)
 
-# Convert accented text to generic ASCII
+# Load initial placename data
+preprocessed_bbox_data <- read.table("www/supernational_bounding_boxes.txt", sep = "\t", header = TRUE, stringsAsFactors = FALSE)
+
+# Convert accented text to generic ASCII (won't handle completely non-latin data - for that we would need to go back to stringi)
 normalize_string <- function(string) {
   
   # Convert to ASCII and transliterate
-  normalized_string <- iconv(string, from = "UTF-8", to = "ASCII//TRANSLIT")
+  normalized_string <- iconv(string, from = "UTF-8", to = "ASCII//TRANSLIT", sub='')
   
   # Remove any remaining or introduced non-ASCII characters
   normalized_string <- gsub("[^[:alnum:][:space:]]", "", normalized_string)
@@ -21,6 +24,41 @@ normalize_string <- function(string) {
   return(normalized_string)
   
 }
+
+# matches placename to preprocessed Natural Earth data
+get_place_preprocessed <- function(input_name, data) {
+  
+  columns <- grep('name', colnames(data), value=TRUE)
+  
+  # Initialize an empty vector to store matches
+  all_matches <- vector("list", length(columns))
+  
+  for (i in seq_along(columns)) {
+    col_name <- columns[i]
+    # Find matches in the current column
+    matches <- agrep(normalize_string(input_name), normalize_string(data[[col_name]]), value = FALSE, max.distance = 0.2)
+    # Store the row indices of the matches
+    all_matches[[i]] <- matches
+  }
+  
+  # Combine all matched row indices
+  matched_indices <- unique(unlist(all_matches))
+  
+  if (length(matched_indices) == 0) return(NULL)
+  
+  # Filter the original data for the matched rows
+  matched_data <- data[matched_indices, ]
+  
+  # Calculate the area of the bounding boxes
+  matched_data$area <- (matched_data$max_lat - matched_data$min_lat) * 
+                       (matched_data$max_lon - matched_data$min_lon)
+  
+  # Return the row with the largest bounding box
+  best_match <- matched_data[which.max(matched_data$area), ]
+  return(best_match)
+
+}
+
 
 # Get iNat tax info from an arbitrary string, genus, or ID number
 get_tax <- function(taxon_name = NULL, genus = FALSE, taxon_id = NULL, locale = NULL) {
@@ -243,17 +281,27 @@ server <- function(input, output, session) {
       place_display_name <- NULL
       
     } else {
+      
+      preprocessed_place <- get_place_preprocessed(placename, preprocessed_bbox_data)
+      if(!is.null(preprocessed_place)) {
+        
+        place_display_name <- preprocessed_place$name
+        bounds <- as.numeric(preprocessed_place[c('min_lat', 'min_lon', 'max_lat', 'max_lon')])
+        
+      } else {
   
-      base_url <- "https://nominatim.openstreetmap.org/search"
-      query <- paste0("?q=", URLencode(placename), "&format=json")
-      full_url <- paste0(base_url, query)
-  
-      response <- readLines(url(full_url), warn = FALSE)
-      json_response <- paste(response, collapse = "")
-      obj <- fromJSON(json_response, simplifyVector=FALSE)[[1]]
-  
-      place_display_name <- obj$display_name
-      bounds <- as.numeric(obj$boundingbox)[c(1,3,2,4)]
+        base_url <- "https://nominatim.openstreetmap.org/search"
+        query <- paste0("?q=", URLencode(placename), "&format=json")
+        full_url <- paste0(base_url, query)
+    
+        response <- readLines(url(full_url), warn = FALSE)
+        json_response <- paste(response, collapse = "")
+        obj <- fromJSON(json_response, simplifyVector=FALSE)[[1]]
+    
+        place_display_name <- obj$display_name
+        bounds <- as.numeric(obj$boundingbox)[c(1,3,2,4)]
+        
+      }
     
     }
     
@@ -518,10 +566,10 @@ server <- function(input, output, session) {
   
   observeEvent(input$submit_specific, {
     
+    r$locale <- locales_list[[input$locale]]
     r$placename <- ''
     r$input_taxon <- ''
     r$user_login <- ''
-    r$locale <- locales_list[[input$locale]]
     r$notices <- 'Loading challenge...'
     r$is_random <- FALSE
     r$ready <- TRUE
@@ -531,6 +579,11 @@ server <- function(input, output, session) {
   observeEvent(input$submit_random, {
     
     r$locale <- locales_list[[input$locale]]
+    r$placename <- input$place
+    r$input_taxon <- input$taxon
+    r$user_login <- input$user_login
+    r$rarity <- input$rarity
+    r$maxchar <- input$maxchar
     r$notices <- 'Loading random genus...'
     r$is_random <- TRUE
     r$ready <- TRUE
@@ -572,12 +625,6 @@ server <- function(input, output, session) {
         
       } else {
         
-        r$placename <- input$place
-        r$input_taxon <- input$taxon
-        r$user_login <- input$user_login
-        r$rarity <- input$rarity
-        r$maxchar <- input$maxchar
-    
         # iNaturalist ID number for a taxon specified by the user
         if(r$input_taxon == '') {
           taxid <-  NULL
@@ -703,7 +750,10 @@ server <- function(input, output, session) {
 
   output$new_game_ui <- renderUI({
     if(r$finished) {
-      actionButton("new_game", "New Game")
+      list(
+        HTML(paste0('<p>Disagree with this ID? <a href="', r$ref_obs$results[[1]]$uri,'" target="_blank">Add your own</a>!</p>')),
+        actionButton("new_game", "New Game")
+      )
     }
   })
 
@@ -857,6 +907,6 @@ shinyApp(ui, server)
 
 # Use my custom shinylive template to make sure there's jekyll frontmatter on the export
 # Then make simple update to shinylive.js so the url parameters are forwarded to the iframe (sed command specific to macos)
-# shinylive::export('~/scripts/iNatle/', '~/scripts/thecnidaegritty/iNatle_raw/', template_dir = "~/scripts/thecnidaegritty/scripts/shinylive_embedded_jekyll_template", template_params = list(title = 'iNatle'))
+# shinylive::export('~/scripts/iNatle/iNatle/', '~/scripts/thecnidaegritty/iNatle_raw/', template_dir = "~/scripts/thecnidaegritty/scripts/shinylive_embedded_jekyll_template", template_params = list(title = 'iNatle'))
 # system("sed -i '' 's/viewerFrameRef.current.src = appInfo.urlPath/viewerFrameRef.current.src = appInfo.urlPath + window.location.search;/g' ~/scripts/thecnidaegritty/iNatle_raw/shinylive/shinylive.js")
 # httpuv::runStaticServer("~/scripts/thecnidaegritty/iNatle_raw/")
