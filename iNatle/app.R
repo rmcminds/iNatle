@@ -25,40 +25,52 @@ normalize_string <- function(string) {
   
 }
 
-# matches placename to preprocessed Natural Earth data
+# Matches place name to preprocessed Natural Earth data and selects either the best match or the biggest match among ties
 get_place_preprocessed <- function(input_name, data) {
   
   columns <- grep('name', colnames(data), value=TRUE)
-  
-  # Initialize an empty vector to store matches
-  all_matches <- vector("list", length(columns))
-  
-  for (i in seq_along(columns)) {
-    col_name <- columns[i]
-    # Find matches in the current column
-    matches <- agrep(normalize_string(input_name), normalize_string(data[[col_name]]), value = FALSE, max.distance = 0.2)
-    # Store the row indices of the matches
-    all_matches[[i]] <- matches
+  input_compare <- tolower(normalize_string(input_name))
+
+  match_results <- list()
+
+  # Check for matches in entire columns first
+  for(i in seq_along(columns)) {
+    col_compare <- tolower(normalize_string(data[[columns[i]]]))
+    match_results[[i]] <- which(col_compare == input_compare)
   }
   
-  # Combine all matched row indices
-  matched_indices <- unique(unlist(all_matches))
+  # Use agrep for fuzzy matching with varying levels of differences
+  if(length(unlist(match_results)) == 0) {
+    # Define maximum allowed differences
+    max_diff <- floor(nchar(input_name) * 0.2)
+    for(diff in 0:max_diff) {
+      for(i in seq_along(columns)) {
+        col_compare <- tolower(normalize_string(data[[columns[i]]]))
+        match_results[[i]] <- agrep(input_compare, col_compare, value = FALSE, max.distance = diff / nchar(input_name))
+      }
+      # Break out of the difference loop if matches are found
+      if(length(unlist(match_results)) > 0) {
+        break
+      }
+    }
+  }
   
-  if (length(matched_indices) == 0) return(NULL)
+  # Filter out unique matches and their indices
+  matched_indices <- unique(unlist(match_results))
+  
+  if(length(matched_indices) == 0) return(NULL)
   
   # Filter the original data for the matched rows
   matched_data <- data[matched_indices, ]
   
   # Calculate the area of the bounding boxes
-  matched_data$area <- (matched_data$max_lat - matched_data$min_lat) * 
-                       (matched_data$max_lon - matched_data$min_lon)
+  matched_data$area <- (matched_data$max_lat - matched_data$min_lat) * (matched_data$max_lon - matched_data$min_lon)
   
   # Return the row with the largest bounding box
   best_match <- matched_data[which.max(matched_data$area), ]
   return(best_match)
-
+  
 }
-
 
 # Get iNat tax info from an arbitrary string, genus, or ID number
 get_tax <- function(taxon_name = NULL, genus = FALSE, taxon_id = NULL, locale = NULL) {
@@ -141,9 +153,13 @@ get_observations <- function(taxon_id   = NULL,
     query <- paste0(names(params), "=", sapply(as.character(params), URLencode), collapse = "&")
     full_url <- paste0(base_url, query)
 
-    response <- readLines(url(full_url), warn = FALSE)
-    json_response <- paste(response, collapse = "")
-    obj <- fromJSON(json_response, simplifyVector=FALSE)
+    obj <- tryCatch({
+      
+      response <- readLines(url(full_url), warn = FALSE)
+      json_response <- paste(response, collapse = "")
+      fromJSON(json_response, simplifyVector=FALSE)
+    
+    }, error = \(e) NA)
 
     return(obj)
   
@@ -159,9 +175,56 @@ choose_taxon <- function(obj, maxchar = 100) {
   gen_counts <- sapply(unique(genera), \(x) sum(sp_counts[genera == x]))
   gen_counts <- gen_counts[sapply(strsplit(unique(genera),''), length) <= maxchar]
   
-  target_genus <- sample(names(gen_counts), 1)
+  if(length(gen_counts) == 0) {
+    return(NA)
+  } else {
+    target_genus <- sample(names(gen_counts), 1)
+    return(target_genus)
+  }
+  
+}
 
-  return(target_genus)
+get_place_bb <- function(placename) {
+  
+  obj <- list()
+  
+  if(placename == '') {
+    
+    obj$bounds <- NULL
+    obj$place_display_name <- NULL
+    
+  } else {
+    
+    preprocessed_place <- get_place_preprocessed(placename, preprocessed_bbox_data)
+    
+    if(!is.null(preprocessed_place)) {
+      
+      obj$place_display_name <- preprocessed_place$name
+      obj$bounds <- as.numeric(preprocessed_place[c('min_lat', 'min_lon', 'max_lat', 'max_lon')])
+      
+      if(anyNA(obj)) obj <- NA
+      
+    } else {
+  
+      base_url <- "https://nominatim.openstreetmap.org/search"
+      query <- paste0("?q=", URLencode(placename), "&format=json")
+      full_url <- paste0(base_url, query)
+  
+      response <- readLines(url(full_url), warn = FALSE)
+      response_list <- fromJSON(paste(response, collapse = ""), simplifyVector = FALSE)
+      
+      if(length(response_list) == 0) {
+        obj <- NA
+      } else {
+        obj$place_display_name <- obj$display_name
+        obj$bounds <- as.numeric(obj$boundingbox)[c(1,3,2,4)]
+      }
+      
+    }
+  
+  }
+  
+  return(obj)
   
 }
 
@@ -204,7 +267,6 @@ censor_hints <- function(target, hint) {
   return(modified_string)
   
 }
-
 
 # Create UI. Mostly a frame that is filled in by the server.
 ui <- fluidPage(
@@ -251,6 +313,7 @@ server <- function(input, output, session) {
                       ref_obs      = NULL,
                       tax_info     = NULL,
                       pretext      = NULL,
+                      time_choice  = 1,
                       all_guesses  = list(),
                       notices      = '',
                       finished     = FALSE,
@@ -266,111 +329,73 @@ server <- function(input, output, session) {
       if('locale' %in% names(query)) r$locale <- query[['locale']]
       if('obs_id' %in% names(query)) updateTextInput(session, 'obs_id', value = query[['obs_id']])
       if('placename' %in% names(query)) r$placename <- query[['placename']]
+      if('time_choice' %in% names(query)) r$time_choice <- query[['time_choice']]
       if('input_taxon' %in% names(query)) r$input_taxon <- query[['input_taxon']]
       if('user_login' %in% names(query)) r$user_login <- query[['user_login']]
+      if('rarity' %in% names(query)) r$rarity <- query[['rarity']]
+      if('maxchar' %in% names(query)) r$maxchar <- query[['maxchar']]
     })
     reset_game()
   
   })
-
-  try_place <- function(placename, taxid) {
-    
-    if(placename == '') {
-      
-      bounds <- NULL
-      place_display_name <- NULL
-      
-    } else {
-      
-      preprocessed_place <- get_place_preprocessed(placename, preprocessed_bbox_data)
-      if(!is.null(preprocessed_place)) {
-        
-        place_display_name <- preprocessed_place$name
-        bounds <- as.numeric(preprocessed_place[c('min_lat', 'min_lon', 'max_lat', 'max_lon')])
-        
-      } else {
   
-        base_url <- "https://nominatim.openstreetmap.org/search"
-        query <- paste0("?q=", URLencode(placename), "&format=json")
-        full_url <- paste0(base_url, query)
-    
-        response <- readLines(url(full_url), warn = FALSE)
-        json_response <- paste(response, collapse = "")
-        obj <- fromJSON(json_response, simplifyVector=FALSE)[[1]]
-    
-        place_display_name <- obj$display_name
-        bounds <- as.numeric(obj$boundingbox)[c(1,3,2,4)]
-        
-      }
-    
-    }
+  time_choices <- c('yesterday', 'on this date', 'in this month of the year', 'some time in the past')
+
+  try_all_params <- function(place_obj, taxid) {
     
     # This should help stabilize the queries throughout the day
     created_d2 <- format(Sys.Date() - 1, "%Y-%m-%d")
-
-    if(any(is.na(bounds))) {
-
-      r$notices <- 'Place name not found'
-      reset_game()
-
-    } else {
-      
-      user_login <- if(input$user_login == '') NULL else input$user_login
-
-      tryCatch({
-        get_random_obs(
-          taxid      = taxid,
-          user_login = user_login,
-          bounds     = bounds,
-          year       = format(Sys.Date() - 1, "%Y"),
-          month      = format(Sys.Date() - 1, "%m"),
-          day        = format(Sys.Date() - 1, "%d"),
-          created_d2 = created_d2
-        )
-        r$pretext <- paste0('I was observed yesterday', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
-      }, error = function(e1) {
-        print(e1)
-        tryCatch({
-          get_random_obs(
-            taxid      = taxid,
-            user_login = user_login,
-            bounds     = bounds,
-            month      = format(Sys.Date(), "%m"),
-            day        = format(Sys.Date(), "%d"),
-            created_d2 = created_d2
-          )
-          r$pretext <- paste0('I was observed on this date', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
-        }, error = function(e2) {
-          print(e2)
-          tryCatch({
-            get_random_obs(
-              taxid      = taxid,
-              user_login = user_login,
-              bounds     = bounds,
-              month      = format(Sys.Date(), "%m"),
-              created_d2 = created_d2
-            )
-            r$pretext <- paste0('I was observed in this month of the year', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
-          }, error = function(e3) {
-            print(e3)
-            tryCatch({
-              get_random_obs(
-                taxid      = taxid,
-                user_login = user_login,
-                bounds     = bounds,
-                created_d2 = created_d2
-              )
-              r$pretext <- paste0('I was observed at some time in the past', paste0(' in ', place_display_name)[!is.null(place_display_name)], '!')
-            }, error = function(e4) {
-              print(e4)
-              r$notices <- 'No observations match all inputs; try again'
-              reset_game()
-            })
-          })
-        })
-      })
-
+    user_login <- if(r$user_login == '') NULL else r$user_login
+    r$ref_obs <- NA
+    
+    if(r$time_choice < 2) {
+      timeframe <- 1
+      get_random_obs(
+        taxid      = taxid,
+        user_login = user_login,
+        bounds     = place_obj$bounds,
+        year       = format(Sys.Date() - 1, "%Y"),
+        month      = format(Sys.Date() - 1, "%m"),
+        day        = format(Sys.Date() - 1, "%d"),
+        created_d2 = created_d2
+      )
     }
+    
+    if(anyNA(r$ref_obs) & r$time_choice < 3) {
+      timeframe <- 2
+      get_random_obs(
+        taxid      = taxid,
+        user_login = user_login,
+        bounds     = place_obj$bounds,
+        month      = format(Sys.Date(), "%m"),
+        day        = format(Sys.Date(), "%d"),
+        created_d2 = created_d2
+      )
+    }
+    
+    if(anyNA(r$ref_obs) & r$time_choice < 4) {
+      timeframe <- 3
+      get_random_obs(
+        taxid      = taxid,
+        user_login = user_login,
+        bounds     = place_obj$bounds,
+        month      = format(Sys.Date(), "%m"),
+        created_d2 = created_d2
+      )
+    }
+    
+    if(anyNA(r$ref_obs)) {
+      timeframe <- 4
+      get_random_obs(
+        taxid      = taxid,
+        user_login = user_login,
+        bounds     = place_obj$bounds,
+        created_d2 = created_d2
+      )
+    }
+    
+    r$pretext <- paste0('I was observed ', time_choices[[timeframe]], paste0(' in ', place_obj$place_display_name)[!is.null(place_obj$place_display_name)], '.')
+    
   }
   
   get_specific_obs <- function(obs_id = NULL) {
@@ -378,9 +403,7 @@ server <- function(input, output, session) {
     r$pretext <- '' # maybe should add info about time location drawn from observation instead of user inputs
     
     # Today's observation
-    r$ref_obs <- tryCatch({
-      get_observations(id = obs_id, locale = r$locale)
-    }, error = \(e) NA)
+    r$ref_obs <- get_observations(id = obs_id, locale = r$locale)
     
     if(!anyNA(r$ref_obs)) {
       
@@ -410,8 +433,9 @@ server <- function(input, output, session) {
       page       = r$rarity,
       per_page   = r$per_page
     )
-    
-    if(sc$total_results == 0) stop(simpleError('No observations matching criteria'))
+
+    if(anyNA(sc)) {r$ref_obs <- NA; return(FALSE)}
+    if(sc$total_results == 0) {r$ref_obs <- NA; return(FALSE)}
 
     # If rarity is just the page number, then must be limited to number of pages
     max_rarity <- ceiling(sc$total_results / r$per_page)
@@ -439,6 +463,8 @@ server <- function(input, output, session) {
     
     # Today's target genus
     r$target_word <- tolower(choose_taxon(sc, r$maxchar))
+        
+    if(anyNA(r$target_word)) {r$ref_obs <- NA; return(FALSE)}
     
     # Taxonomy info for today's target genus
     r$tax_info <- get_tax(r$target_word, TRUE, locale = r$locale)
@@ -551,7 +577,8 @@ server <- function(input, output, session) {
       ),
       hr(),
       
-      HTML("<p><b>Or, generate a random game</b><br>iNatle will look for any relevant observations yesterday.<br><br>If there were none,<br>it will look for observations on this day in previous years,<br> then this month in previous years,<br> then all observations from any time.</p>"),
+      HTML("<p><b>Or, generate a random game</b><br>iNatle will look for relevant observations in your chosen timeframe.<br>If there were none,<br>it will iterate through the list of broader timeframes.</p>"),
+      selectInput("time_choice", HTML("<b>Enter a timeframe</b>"), time_choices, time_choices[isolate(r$time_choice)], width = '100%'),
       textInput('place',         HTML("<b>Enter a place name</b><br>or leave it blank"),      value = isolate(r$placename),   width = '100%'),
       textInput('taxon',         HTML("<b>Enter a taxonomic group</b><br>or leave it blank"), value = isolate(r$input_taxon), width = '100%'),
       textInput('user_login',    HTML("<b>Enter a user login name</b><br>or leave it blank"), value = isolate(r$user_login),  width = '100%'),
@@ -579,6 +606,7 @@ server <- function(input, output, session) {
   observeEvent(input$submit_random, {
     
     r$locale <- locales_list[[input$locale]]
+    r$time_choice <- which(input$time_choice == time_choices)
     r$placename <- input$place
     r$input_taxon <- input$taxon
     r$user_login <- input$user_login
@@ -598,29 +626,20 @@ server <- function(input, output, session) {
   observeEvent(r$ready, {
     
     if(r$ready) {
-      
+
       if(!r$is_random) {
         
         if(input$obs_id != '') {
-        
           get_specific_obs(input$obs_id)
-          
           if(anyNA(r$ref_obs)) {
-      
             r$notices <- 'ID number does not appear to be valid'
             reset_game()
-            
           } else {
-            
             assemble_game()
-            
           }
-        
         } else {
-          
           r$notices <- 'Please enter an ID number'
           reset_game()
-          
         }
         
       } else {
@@ -633,19 +652,26 @@ server <- function(input, output, session) {
             get_tax(r$input_taxon)$id
           }, error = \(e) NA)
         }
-        
-        if(!anyNA(taxid)) {
-          try_place(r$placename, taxid)
-          assemble_game()
-        } else {
+        if(anyNA(taxid)) {
           r$notices <- 'Input taxon is not recognized'
           reset_game()
+        } else {
+          place_obj <- get_place_bb(r$placename)
+          if(anyNA(place_obj)) {
+            r$notices <- 'Place name not found'
+            reset_game()
+          } else {
+            try_all_params(place_obj, taxid)
+            if(anyNA(r$ref_obs)) {
+              r$notices <- 'No observations match all inputs; try again'
+              reset_game()
+            } else {
+              assemble_game()
+            }
+          }
         }
-        
       }
-      
     }
-    
   })
   
   output$game_ui <- renderUI({
