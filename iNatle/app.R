@@ -214,10 +214,17 @@ get_place_bb <- function(placename) {
       response_list <- fromJSON(paste(response, collapse = ""), simplifyVector = FALSE)
       
       if(length(response_list) == 0) {
+        
         obj <- NA
+        
       } else {
-        obj$place_display_name <- obj$display_name
-        obj$bounds <- as.numeric(obj$boundingbox)[c(1,3,2,4)]
+        
+        areas <- sapply(response_list, \(x) (as.numeric(x$boundingbox[[2]]) - as.numeric(x$boundingbox[[1]])) * (as.numeric(x$boundingbox[[4]]) - as.numeric(x$boundingbox[[3]])))
+        biggest <- which.max(areas)
+        
+        obj$place_display_name <- response_list[[biggest]]$display_name
+        obj$bounds <- as.numeric(response_list[[biggest]]$boundingbox)[c(1,3,2,4)]
+        
       }
       
     }
