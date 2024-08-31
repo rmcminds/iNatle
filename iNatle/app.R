@@ -42,7 +42,7 @@ get_place_preprocessed <- function(input_name, data) {
   # Use agrep for fuzzy matching with varying levels of differences
   if(length(unlist(match_results)) == 0) {
     # Define maximum allowed differences
-    max_diff <- floor(nchar(input_name) * 0.2)
+    max_diff <- floor(nchar(input_name) * 0.1)
     for(diff in 0:max_diff) {
       for(i in seq_along(columns)) {
         col_compare <- tolower(normalize_string(data[[columns[i]]]))
@@ -782,12 +782,10 @@ server <- function(input, output, session) {
   })
 
   output$new_game_ui <- renderUI({
-    if(r$finished) {
-      list(
-        HTML(paste0('<p>Disagree with this ID? <a href="', r$ref_obs$results[[1]]$uri,'" target="_blank">Add your own</a>!</p>')),
-        actionButton("new_game", "New Game")
-      )
-    }
+    list(
+      HTML(paste0('<p>Disagree with this ID? <a href="', r$ref_obs$results[[1]]$uri,'" target="_blank">Add your own</a>!</p>')),
+      actionButton("new_game", "New Game")
+    )
   })
 
   used_letters <- reactive({
