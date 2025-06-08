@@ -914,10 +914,10 @@ server <- function(input, output, session) {
       HTML(paste(lines, collapse = '<br>')),
       HTML(paste0('<br><br><a href=',
                   URLencode(r$savedquery_noid),
-                  ' target="_blank">Save your query</a>')),
+                  ' target="_blank">Reuse the same query</a>')),
       HTML(paste0('<br>or<br><a href=',
                   URLencode(paste0(r$savedquery_noid, '&obs_id=', r$ref_obs$results[[1]]$id)),
-                  ' target="_blank">Challenge a friend!</a>'))
+                  ' target="_blank">Take the Challenge!</a>'))
     )
   }
 
