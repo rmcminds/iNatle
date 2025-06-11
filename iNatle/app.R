@@ -337,7 +337,7 @@ server <- function(input, output, session) {
     isolate({
       if('locale' %in% names(r$query)) r$locale <- r$query[['locale']]
       if('obs_id' %in% names(r$query)) updateTextInput(session, 'obs_id', value = r$query[['obs_id']])
-      if('placename' %in% names(r$query)) r$placename <- r$query[['placename']]
+      if('placename' %in% names(r$query)) r$placename <- gsub("+", " ", r$query[['placename']], fixed = TRUE) # whitespace does weird things
       if('time_choice' %in% names(r$query)) r$time_choice <- r$query[['time_choice']]
       if('input_taxon' %in% names(r$query)) r$input_taxon <- r$query[['input_taxon']]
       if('user_login' %in% names(r$query)) r$user_login <- r$query[['user_login']]
