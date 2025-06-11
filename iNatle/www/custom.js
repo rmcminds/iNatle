@@ -62,3 +62,12 @@ document.addEventListener('touchend', function(e) {
     in_button_touch = false;
   }
 });
+
+Shiny.addCustomMessageHandler("update_url", function(message) {
+  const newParams = new URLSearchParams(window.location.search);
+  for (const key in message) {
+    newParams.set(key, message[key]);
+  }
+  const newUrl = `${window.location.pathname}?${newParams.toString()}`;
+  window.history.pushState({}, '', newUrl);
+});
