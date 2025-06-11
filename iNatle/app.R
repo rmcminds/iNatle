@@ -660,7 +660,7 @@ server <- function(input, output, session) {
       )
 
       # update url in browser to reflect chosen parameters
-      session$sendCustomMessage("update_url", as.list(setNames(URLencode(allparams),names(allparams))))
+      session$sendCustomMessage("update_url", as.list(allparams))
 
       if(!r$is_random) {
 
