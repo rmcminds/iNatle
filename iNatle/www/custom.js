@@ -63,11 +63,12 @@ document.addEventListener('touchend', function(e) {
   }
 });
 
+// '.parent' is needed for this to work when app is in iframe, but would need to be removed if not
 Shiny.addCustomMessageHandler("update_url", function(message) {
-  const newParams = new URLSearchParams(window.location.search);
+  const newParams = new URLSearchParams(window.parent.location.search);
   for (const key in message) {
     newParams.set(key, message[key]);
   }
-  const newUrl = `${window.location.pathname}?${newParams.toString()}`;
-  window.history.pushState({}, '', newUrl);
+  const newUrl = `${window.parent.location.pathname}?${newParams.toString()}`;
+  window.parent.history.pushState({}, '', newUrl);
 });
