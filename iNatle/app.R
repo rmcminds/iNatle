@@ -641,21 +641,26 @@ server <- function(input, output, session) {
 
     if(r$ready) {
 
+      allparams <- c(
+        locale      = r$locale,
+        placename   = if(r$placename != '')   r$placename   else NULL,
+        time_choice = if(r$time_choice != '') r$time_choice else NULL,
+        input_taxon = if(r$input_taxon != '') r$input_taxon else NULL,
+        user_login  = if(r$user_login != '')  r$user_login  else NULL,
+        rarity      = if(r$rarity != '')      r$rarity      else NULL,
+        maxchar     = if(r$maxchar != '')     r$maxchar     else NULL
+      )
+
       r$savedquery_noid <- paste0(
-        'https://thecnidaegritty.org/iNatle/?locale=',
+        'https://thecnidaegritty.org/iNatle/?',
         paste(
-          c(
-            r$locale,
-            if(r$placename != '')   paste0('placename=',   r$placename)   else NULL,
-            if(r$time_choice != '') paste0('time_choice=', r$time_choice) else NULL,
-            if(r$input_taxon != '') paste0('input_taxon=', r$input_taxon) else NULL,
-            if(r$user_login != '')  paste0('user_login=',  r$user_login)  else NULL,
-            if(r$rarity != '')      paste0('rarity=',      r$rarity)      else NULL,
-            if(r$maxchar != '')     paste0('maxchar=',     r$maxchar)     else NULL
-          ),
+          sapply(names(allparams), \(x) paste0(x, '=', allparams[[x]])),
           collapse='&'
         )
       )
+
+      # update url in browser to reflect chosen parameters
+      session$sendCustomMessage("update_url", as.list(allparams))
 
       if(!r$is_random) {
 
@@ -914,10 +919,10 @@ server <- function(input, output, session) {
       HTML(paste(lines, collapse = '<br>')),
       HTML(paste0('<br><br><a href=',
                   URLencode(r$savedquery_noid),
-                  ' target="_blank">Reuse the same query</a>')),
+                  ' target="_blank">New observation with the same query</a>')),
       HTML(paste0('<br>or<br><a href=',
                   URLencode(paste0(r$savedquery_noid, '&obs_id=', r$ref_obs$results[[1]]$id)),
-                  ' target="_blank">Take the Challenge!</a>'))
+                  ' target="_blank">Try the same observation</a>'))
     )
   }
 
